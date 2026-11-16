@@ -185,6 +185,7 @@ export const RACE_SPORT_LABEL: Record<RaceSport, string> = {
 export const RACE_DISTANCES: Record<RaceSport, { key: string; label: string }[]> = {
   triathlon: [
     { key: "super_sprint", label: "Super Sprint" }, { key: "sprint", label: "Sprint" }, { key: "olympic", label: "Olímpico" },
+    { key: "t50", label: "T50" }, { key: "t100", label: "T100" },
     { key: "half", label: "Meio Ironman (70.3)" }, { key: "full", label: "Ironman" }, { key: "other", label: "Outra" },
   ],
   run: [

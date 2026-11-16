@@ -13,7 +13,7 @@ const LONG: Days = { taper: 12, peak: 21, build: 56, recovery: 10 };
 const ULTRA: Days = { taper: 16, peak: 21, build: 70, recovery: 21 };
 /** Duração das fases pela exigência da prova (provas curtas → taper curto; muito longas → taper e recuperação longos). */
 export const PHASE_DAYS: Record<RaceDistance, Days> = {
-  super_sprint: SHORT, sprint: SHORT, olympic: MEDIUM, half: LONG, full: ULTRA,
+  super_sprint: SHORT, sprint: SHORT, olympic: MEDIUM, t50: MEDIUM, t100: LONG, half: LONG, full: ULTRA,
   run_5k: SHORT, run_10k: SHORT, run_half: MEDIUM, run_marathon: { taper: 14, peak: 21, build: 70, recovery: 14 }, run_trail: MEDIUM, run_ultra: ULTRA,
   bike_tt: SHORT, bike_road: MEDIUM, bike_granfondo: LONG, bike_mtb: MEDIUM,
   swim_100: SHORT, swim_200: SHORT, swim_400: SHORT, swim_800: SHORT, swim_1500: SHORT,
@@ -21,7 +21,7 @@ export const PHASE_DAYS: Record<RaceDistance, Days> = {
   other: { taper: 7, peak: 14, build: 42, recovery: 7 },
 };
 /** Provas depois das quais vem uma transição (descanso ativo). */
-const NEEDS_TRANSITION: Record<string, number> = { full: 13, half: 6, run_marathon: 10, run_ultra: 13, bike_granfondo: 4, ow_10k: 4 };
+const NEEDS_TRANSITION: Record<string, number> = { full: 13, half: 6, t100: 4, run_marathon: 10, run_ultra: 13, bike_granfondo: 4, ow_10k: 4 };
 
 export interface PhaseSegment { phase: Phase; from: string; to: string; raceId?: string }
 
