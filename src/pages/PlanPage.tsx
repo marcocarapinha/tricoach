@@ -16,7 +16,7 @@ import { addDays, diffDays, fmtDatePt, fmtDuration, MONTHS_PT, month, startOfWee
 import { phaseOn, weekTarget, nextRace as findNextRace, type PhaseSegment } from "@/lib/engine/periodization";
 import { buildSteps, generateWeek, matchWeek, plannedTss, weekCompliance, type SessionMatch, type SessionStatus } from "@/lib/engine/plan";
 import { downloadWorkoutFit, stepLines } from "@/lib/workout-format";
-import { PHASE_LABEL, RACE_DISTANCE_LABEL, SESSION_LABEL, SPORT_COLOR, SPORT_LABEL, type PlannedSession, type Race, type SessionType, type Sport } from "@/lib/types";
+import { PHASE_LABEL, raceLabel, raceSportOf, SESSION_LABEL, SPORT_COLOR, SPORT_LABEL, type PlannedSession, type Race, type SessionType, type Sport } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Dumbbell } from "lucide-react";
 import { RoutineView, useFunctionalProfile } from "@/components/Functional";
@@ -24,6 +24,7 @@ import { buildRoutine, routineToSession, weekSuggestions, MODE_LABEL as FUNC_MOD
 import { restDaysFor } from "@/lib/rest-days";
 import { CoachImportDialog } from "@/components/CoachImport";
 import { CalendarConnectDialog } from "@/components/CalendarConnect";
+import { RaceSportDistance } from "@/components/RaceFields";
 
 const fmtHms = (s?: number | null) => (s ? `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}` : "–");
 const parseHms = (v: string) => { const p = v.split(":").map(Number); if (p.some(Number.isNaN)) return null; return p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : p.length === 2 ? p[0] * 3600 + p[1] * 60 : null; };
@@ -176,7 +177,7 @@ function WeekPlanner() {
           <Button variant="outline" size="icon" aria-label="Semana seguinte" onClick={() => setWs(addDays(ws, 7))}><ChevronRight /></Button>
           {!coach && <Button variant={confirmGen ? "destructive" : "secondary"} size="sm" onClick={generate}><Sparkles />{confirmGen ? "Substituir semana?" : sessions.length ? "Regenerar" : "Gerar semana"}</Button>}
           <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}><FileSpreadsheet />Importar Excel</Button>
-          <Button variant="outline" size="sm" onClick={() => setCalOpen(true)}><CalendarSync />TrainingPeaks</Button>
+          <Button variant="outline" size="sm" onClick={() => setCalOpen(true)}><CalendarSync />Calendário</Button>
           {!!sessions.length && <Button variant={confirmDel ? "destructive" : "ghost"} size="sm" onClick={deleteWeek}><Trash2 />{confirmDel ? `Apagar ${sessions.length} sessões?` : "Apagar semana"}</Button>}
           <Button size="sm" onClick={() => setEdit(newSession(ws, core.profile))}><Plus />Sessão</Button>
         </div>
@@ -308,7 +309,7 @@ function SessionCard({ m, onEdit, onDelete }: { m: SessionMatch; onEdit: () => v
         <Icon className={cn("mt-0.5 h-3.5 w-3.5 shrink-0", st.cls)} aria-label={st.label} />
         <div className="min-w-0 flex-1">
           <div className="truncate text-xs font-medium" title={s.description ? `${s.title}\n${s.description}` : s.title}>{s.source === "coach" || s.source === "calendar" ? s.title.replace(/^[^·]+·\s*/, "") || SESSION_LABEL[s.type] : SESSION_LABEL[s.type]}</div>
-          {(s.source === "coach" || s.source === "calendar") && <div className="text-[10px] font-medium text-secondary">{s.source === "coach" ? "Treinador" : "TrainingPeaks"}</div>}
+          {(s.source === "coach" || s.source === "calendar") && <div className="text-[10px] font-medium text-secondary">{s.source === "coach" ? "Treinador" : "Calendário"}</div>}
           <div className="text-muted-foreground">{SPORT_LABEL[s.sport]} · {s.durationMin} min · {s.tss ?? plannedTss(s.sport, s.type, s.durationMin)} TSS</div>
           {m.activity && (
             <Link to={`/atividades/${m.activity.id}`} className={cn("mt-1 block truncate hover:underline", st.cls)}>
@@ -398,7 +399,7 @@ function RacesCard() {
     <tr key={r.id} className="border-b border-border/50">
       <td className="num whitespace-nowrap py-2 pr-3 text-muted-foreground">{fmtDatePt(r.date)}</td>
       <td className="py-2 pr-3"><div className="flex items-center gap-2">{r.id === next?.id && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}<span className="font-medium">{r.name}</span></div></td>
-      <td className="whitespace-nowrap py-2 pr-3 text-muted-foreground">{RACE_DISTANCE_LABEL[r.distance]}</td>
+      <td className="whitespace-nowrap py-2 pr-3 text-muted-foreground">{raceLabel(r)}</td>
       <td className="py-2 pr-3"><Badge variant={r.priority === "A" ? "warn" : "outline"}>{r.priority}</Badge></td>
       <td className="num py-2 pr-3">{fmtHms(r.goalTimeS)}</td>
       <td className={cn("num py-2 pr-3", r.resultTimeS && r.goalTimeS && (r.resultTimeS <= r.goalTimeS ? "text-good" : "text-bad"))}>{fmtHms(r.resultTimeS)}</td>
@@ -412,11 +413,11 @@ function RacesCard() {
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0">
         <div className="space-y-1.5"><CardTitle>Provas</CardTitle><CardDescription>A: objetivo da época (periodização completa) · B: mini-taper · C: treino de qualidade.</CardDescription></div>
-        <Button size="sm" onClick={() => setEdit({ id: "", date: addDays(derived.today, 90), name: "", distance: "olympic", priority: "B" })}><Plus />Prova</Button>
+        <Button size="sm" onClick={() => setEdit({ id: "", date: addDays(derived.today, 90), name: "", sport: "triathlon", distance: "olympic", priority: "B" })}><Plus />Prova</Button>
       </CardHeader>
       <CardContent className="overflow-x-auto">
         <table className="w-full min-w-[560px] text-sm">
-          <thead className="text-left text-xs text-muted-foreground"><tr>{["Data", "Prova", "Distância", "Prior.", "Objetivo", "Resultado", ""].map((h) => <th key={h} className="pb-2 pr-3 font-medium">{h}</th>)}</tr></thead>
+          <thead className="text-left text-xs text-muted-foreground"><tr>{["Data", "Prova", "Desporto · distância", "Prior.", "Objetivo", "Resultado", ""].map((h) => <th key={h} className="pb-2 pr-3 font-medium">{h}</th>)}</tr></thead>
           <tbody>
             {upcoming.map(row)}
             {!!past.length && <tr><td colSpan={7} className="pb-1 pt-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Anteriores</td></tr>}
@@ -430,7 +431,7 @@ function RacesCard() {
 }
 
 function RaceDialog({ race, onClose, onSave }: { race: Race; onClose: () => void; onSave: (r: Race) => void }) {
-  const [r, setR] = useState(race);
+  const [r, setR] = useState<Race>({ ...race, sport: raceSportOf(race) });
   const [goal, setGoal] = useState(race.goalTimeS ? fmtHms(race.goalTimeS) : "");
   const [result, setResult] = useState(race.resultTimeS ? fmtHms(race.resultTimeS) : "");
   return (
@@ -438,18 +439,14 @@ function RaceDialog({ race, onClose, onSave }: { race: Race; onClose: () => void
       <DialogContent>
         <DialogHeader><DialogTitle>{race.id ? "Editar prova" : "Nova prova"}</DialogTitle></DialogHeader>
         <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2 space-y-1"><Label>Nome</Label><Input autoFocus value={r.name} placeholder="Ex.: Meio Ironman de Cascais" onChange={(e) => setR({ ...r, name: e.target.value })} /></div>
+          <div className="col-span-2 space-y-1"><Label>Nome</Label><Input autoFocus value={r.name} placeholder="Ex.: Meia Maratona de Lisboa" onChange={(e) => setR({ ...r, name: e.target.value })} /></div>
           <div className="space-y-1"><Label>Data</Label><Input type="date" value={r.date} onChange={(e) => setR({ ...r, date: e.target.value })} /></div>
           <div className="space-y-1">
             <Label>Prioridade</Label>
             <Select value={r.priority} onValueChange={(v) => setR({ ...r, priority: v as Race["priority"] })}><SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent><SelectItem value="A">A · objetivo</SelectItem><SelectItem value="B">B · importante</SelectItem><SelectItem value="C">C · treino</SelectItem></SelectContent></Select>
           </div>
-          <div className="space-y-1">
-            <Label>Distância</Label>
-            <Select value={r.distance} onValueChange={(v) => setR({ ...r, distance: v as Race["distance"] })}><SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{Object.entries(RACE_DISTANCE_LABEL).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent></Select>
-          </div>
+          <RaceSportDistance sport={r.sport ?? "triathlon"} distance={r.distance} onChange={(v) => setR({ ...r, ...v })} />
           <div className="space-y-1"><Label>Local</Label><Input value={r.location ?? ""} onChange={(e) => setR({ ...r, location: e.target.value })} /></div>
           <div className="space-y-1"><Label>Objetivo (h:mm:ss)</Label><Input value={goal} placeholder="4:55:00" onChange={(e) => setGoal(e.target.value)} /></div>
           <div className="space-y-1"><Label>Resultado (h:mm:ss)</Label><Input value={result} placeholder="–" onChange={(e) => setResult(e.target.value)} /></div>

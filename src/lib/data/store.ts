@@ -1,3 +1,4 @@
+import { raceSportOf } from "../types";
 import type { Activity, ActivityStreams, AthleteProfile, CheckIn, Dashboard, FunctionalLog, GarminConnection, PlannedSession, Race, Suggestion, SuggestionStatus, WeekSetting, Wellness } from "../types";
 import { DEFAULT_PROFILE } from "../types";
 import type { StatsQuery } from "../engine/stats";
@@ -64,7 +65,7 @@ export interface Store {
   garminBackfillStep(): Promise<BackfillStep>;
   /** dias de descanso de uma semana (null = voltar aos habituais) */
   saveWeekRestDays(weekStart: string, restDays: number[] | null): Promise<void>;
-  /** calendário externo (.ics do TrainingPeaks ou outro) */
+  /** calendário externo (.ics) onde o treinador ou outras aplicações põem os treinos */
   calendarStatus(): Promise<CalendarFeed | null>;
   calendarConnect(url: string, provider: string): Promise<{ imported: number }>;
   calendarSync(): Promise<{ imported: number }>;
@@ -261,7 +262,7 @@ export function supabaseStore(): Store {
         sb.from("functional_log").select("*").gte("day", addDays(todayISO(), -400)),
         sb.from("week_settings").select("week_start, rest_days").gte("week_start", addDays(todayISO(), -120)),
       ]);
-      const races: Race[] = (racesQ.data ?? []).map((r: any) => ({ id: r.id, date: r.race_date, name: r.name, distance: r.distance, priority: r.priority, goalTimeS: r.goal_time_s, resultTimeS: r.result_time_s, location: r.location, notes: r.notes }));
+      const races: Race[] = (racesQ.data ?? []).map((r: any) => ({ id: r.id, date: r.race_date, name: r.name, sport: r.sport ?? "triathlon", distance: r.distance, priority: r.priority, goalTimeS: r.goal_time_s, resultTimeS: r.result_time_s, location: r.location, notes: r.notes }));
       const r = prof.data;
       const profile: AthleteProfile = r ? {
         name: r.name, ftp: r.ftp, runThresholdPace: r.run_threshold_pace, css: r.css, hrMax: r.hr_max, lthr: r.lthr,
@@ -306,7 +307,7 @@ export function supabaseStore(): Store {
     },
     async saveRace(r) {
       const isUuid = /^[0-9a-f-]{36}$/i.test(r.id);
-      const { data, error } = await sb.from("races").upsert({ ...(isUuid ? { id: r.id } : {}), user_id: await userId(), race_date: r.date, name: r.name, distance: r.distance, priority: r.priority,
+      const { data, error } = await sb.from("races").upsert({ ...(isUuid ? { id: r.id } : {}), user_id: await userId(), race_date: r.date, name: r.name, sport: raceSportOf(r), distance: r.distance, priority: r.priority,
         goal_time_s: r.goalTimeS ?? null, result_time_s: r.resultTimeS ?? null, location: r.location ?? null, notes: r.notes ?? null }).select().single();
       if (error) throw error;
       return { ...r, id: data.id };

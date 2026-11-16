@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 export function PlanSourcePicker({ value, onChange }: { value: AthleteProfile["planSource"]; onChange: (v: AthleteProfile["planSource"]) => void }) {
   const opts = [
     { v: "app" as const, icon: Sparkles, title: "A app propõe o plano", text: "Gera as semanas a partir da periodização, da sua forma atual e das provas. Pode editar tudo." },
-    { v: "coach" as const, icon: UserCheck, title: "Tenho treinador", text: "A app não propõe treinos. Importa os treinos do treinador (Excel ou TrainingPeaks) e compara com o que fez." },
+    { v: "coach" as const, icon: UserCheck, title: "Tenho treinador", text: "A app não propõe treinos. Importa os treinos do treinador (Excel ou calendário) e compara com o que fez." },
   ];
   return (
     <div className="grid gap-2 sm:grid-cols-2" role="radiogroup">

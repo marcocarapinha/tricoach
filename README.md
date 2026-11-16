@@ -122,7 +122,7 @@ A página **Hoje** mostra a rotina do dia e a página **Época e plano** marca o
 
 A biblioteca (`src/lib/engine/functional.ts`) tem 50 exercícios, cada um com ilustração (posição inicial → final), com doses por nível e instruções. Os exercícios rodam entre sessões. As ilustrações são desenhadas em código (`src/components/figures`): uma figura esquemática com comprimentos fixos, poses definidas por ângulos e o material (degrau, elástico, banco, parede) nas cores do tema. A página **Exercícios** mostra a biblioteca com filtros por zona. A rotina pode ser marcada como feita (tabela `functional_log`), juntada ao plano como sessão "Força · Funcional" ou exportada em FIT.
 
-## Plano do treinador, dias de descanso e TrainingPeaks
+## Plano do treinador, dias de descanso e calendário
 
 - **Quem faz o plano:** escolhe-se no assistente ou em Definições → Plano de treino.
   - **A app** gera as semanas a partir da periodização.
@@ -135,10 +135,9 @@ A biblioteca (`src/lib/engine/functional.ts`) tem 50 exercícios, cada um com il
   - Arrumações reconhecidas: lista com datas, grelha semanal (dias em colunas ou em linhas, com data ou «Semana N») ou células soltas.
   - O texto de cada treino é lido por `supabase/functions/_shared/workout-text.ts`, que entende português e inglês: modalidade, duração, distância (com séries), tipo e descanso.
   - Antes de gravar, tudo pode ser revisto e corrigido: data, modalidade, tipo, minutos e título.
-- **TrainingPeaks:** a API oficial só é concedida a parceiros comerciais, não para uso pessoal.
-  - A app usa a sincronização de calendário .ics do TrainingPeaks (Premium: Settings → Account → Calendar). Traz os treinos de 5 dias para trás e 14 para a frente; o TrainingPeaks pode demorar até 24 h a refletir alterações.
+- **Calendário (.ics):** qualquer aplicação que publique os treinos num calendário com endereço de subscrição (iCal/webcal).
   - O endereço fica no Vault. A Edge Function `calendar-sync` lê-o a pedido e de 3 em 3 horas (pg_cron), e só aceita endereços https públicos.
-  - Funciona também com outros calendários .ics.
+  - Só importa os eventos que são treinos e retira do plano os que desaparecem do calendário.
 
 ## Publicação (Vercel + Supabase)
 

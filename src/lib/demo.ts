@@ -218,10 +218,10 @@ function demoBests(a: Activity, ftp: number, thr: number, css: number): Record<s
   return Object.keys(out).length ? out : null;
 }
 
-const RACE_META: Record<string, { name: string; distance: Race["distance"]; priority: Race["priority"] }> = {
-  "5-12": { name: "Triatlo Olímpico", distance: "olympic", priority: "B" },
-  "6-22": { name: "Meio Ironman", distance: "half", priority: "A" },
-  "9-14": { name: "Triatlo Sprint", distance: "sprint", priority: "C" },
+const RACE_META: Record<string, { name: string; sport: "triathlon"; distance: Race["distance"]; priority: Race["priority"] }> = {
+  "5-12": { name: "Triatlo Olímpico", sport: "triathlon", distance: "olympic", priority: "B" },
+  "6-22": { name: "Meio Ironman", sport: "triathlon", distance: "half", priority: "A" },
+  "9-14": { name: "Triatlo Sprint", sport: "triathlon", distance: "sprint", priority: "C" },
 };
 
 /** Provas passadas (com resultado, a partir das atividades) e as da próxima época. */

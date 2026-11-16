@@ -137,3 +137,11 @@ describe("endereço do calendário", () => {
     for (const bad of ["http://localhost/x.ics", "https://127.0.0.1/a", "https://10.0.0.5/a", "https://[::1]/a", "ftp://x.com/a", "https://intranet/a", "nada"]) expect(() => normalizeUrl(bad)).toThrow();
   });
 });
+
+describe("calendário genérico", () => {
+  it("ignora eventos que não são treinos", () => {
+    const ev = { uid: "x", date: "2026-11-20", summary: "Reunião de equipa", description: "Sala 2, 1h" };
+    expect(icsEventToSessions(ev, P)).toEqual([]);
+    expect(icsEventToSessions({ ...ev, summary: "Treino", description: "Corrida 40' Z2" }, P)[0].sport).toBe("run");
+  });
+});

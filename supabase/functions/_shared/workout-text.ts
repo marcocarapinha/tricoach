@@ -1,4 +1,4 @@
-// Leitura de treinos escritos à mão (Excel do treinador, calendário .ics do TrainingPeaks…).
+// Leitura de treinos escritos à mão (Excel do treinador, calendários .ics de outras aplicações…).
 // Módulo puro, partilhado pela app (importação de Excel) e pela Edge Function calendar-sync.
 // Entende português e inglês: "Bike 1h30 Z2", "Natação 2000m: 4x200 limiar", "Corrida 45' solto", "Descanso".
 
@@ -155,7 +155,7 @@ export function parseWorkoutText(raw: string, paces: Paces): ParsedSession[] {
   });
 }
 
-// ───────────── Calendário .ics (TrainingPeaks, Google Calendar…) ─────────────
+// ───────────── Calendário .ics ─────────────
 
 export interface IcsEvent { uid: string; date: string; summary: string; description: string }
 
@@ -199,7 +199,10 @@ export function parseIcs(ics: string, tz = "Europe/Lisbon"): IcsEvent[] {
   return out;
 }
 
-/** Converte um evento do calendário em sessões (o resumo indica a modalidade; a descrição dá duração e detalhe). */
+/**
+ * Converte um evento do calendário em sessões (o resumo indica a modalidade; a descrição dá duração e detalhe).
+ * Eventos que não são treinos devolvem [].
+ */
 export function icsEventToSessions(e: IcsEvent, paces: Paces): ParsedSession[] {
   const summarySport = detectSport(e.summary);
   const text = [e.summary, e.description].filter(Boolean).join("\n");
@@ -218,5 +221,6 @@ export function icsEventToSessions(e: IcsEvent, paces: Paces): ParsedSession[] {
       title: clean(e.summary).slice(0, 80) || SPORT_PT[summarySport], description: clean(e.description).slice(0, 2000),
     }];
   }
-  return parseWorkoutText(text, paces);
+  // sem modalidade no título: só conta se a descrição tiver uma modalidade (reuniões, aniversários… ficam de fora)
+  return parseWorkoutText(text, paces).filter((x) => x.sport !== "other");
 }

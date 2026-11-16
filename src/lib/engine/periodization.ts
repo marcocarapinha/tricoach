@@ -6,13 +6,22 @@ import { addDays, diffDays, startOfWeek } from "../dates";
  *   … base → construção → pico → taper → PROVA → recuperação → (transição até à base seguinte)
  * Durações em dias, por distância da prova.
  */
-export const PHASE_DAYS: Record<RaceDistance, { taper: number; peak: number; build: number; recovery: number }> = {
-  sprint: { taper: 7, peak: 14, build: 42, recovery: 4 },
-  olympic: { taper: 10, peak: 14, build: 56, recovery: 7 },
-  half: { taper: 12, peak: 21, build: 56, recovery: 10 },
-  full: { taper: 16, peak: 21, build: 70, recovery: 21 },
+type Days = { taper: number; peak: number; build: number; recovery: number };
+const SHORT: Days = { taper: 7, peak: 14, build: 42, recovery: 4 };
+const MEDIUM: Days = { taper: 10, peak: 14, build: 56, recovery: 7 };
+const LONG: Days = { taper: 12, peak: 21, build: 56, recovery: 10 };
+const ULTRA: Days = { taper: 16, peak: 21, build: 70, recovery: 21 };
+/** Duração das fases pela exigência da prova (provas curtas → taper curto; muito longas → taper e recuperação longos). */
+export const PHASE_DAYS: Record<RaceDistance, Days> = {
+  super_sprint: SHORT, sprint: SHORT, olympic: MEDIUM, half: LONG, full: ULTRA,
+  run_5k: SHORT, run_10k: SHORT, run_half: MEDIUM, run_marathon: { taper: 14, peak: 21, build: 70, recovery: 14 }, run_trail: MEDIUM, run_ultra: ULTRA,
+  bike_tt: SHORT, bike_road: MEDIUM, bike_granfondo: LONG, bike_mtb: MEDIUM,
+  swim_100: SHORT, swim_200: SHORT, swim_400: SHORT, swim_800: SHORT, swim_1500: SHORT,
+  ow_1500: SHORT, ow_3k: MEDIUM, ow_5k: MEDIUM, ow_10k: LONG,
   other: { taper: 7, peak: 14, build: 42, recovery: 7 },
 };
+/** Provas depois das quais vem uma transição (descanso ativo). */
+const NEEDS_TRANSITION: Record<string, number> = { full: 13, half: 6, run_marathon: 10, run_ultra: 13, bike_granfondo: 4, ow_10k: 4 };
 
 export interface PhaseSegment { phase: Phase; from: string; to: string; raceId?: string }
 
@@ -46,7 +55,7 @@ export function buildSeason(races: Race[], from: string, to: string): PhaseSegme
     push("race", r.date, r.date, r.id);
     push("recovery", addDays(r.date, 1), addDays(r.date, d.recovery));
     // transição curta depois de uma prova longa
-    if (r.distance === "full" || r.distance === "half") push("transition", cursor, addDays(cursor, r.distance === "full" ? 13 : 6));
+    if (NEEDS_TRANSITION[r.distance]) push("transition", cursor, addDays(cursor, NEEDS_TRANSITION[r.distance]));
   }
   if (cursor <= to) push("base", cursor, to);
   return segs;

@@ -176,15 +176,52 @@ export interface GarminConnection {
 
 // ───────────── Fase 2 ─────────────
 
-export type RaceDistance = "sprint" | "olympic" | "half" | "full" | "other";
-export const RACE_DISTANCE_LABEL: Record<RaceDistance, string> = {
-  sprint: "Sprint", olympic: "Olímpico", half: "Meio Ironman (70.3)", full: "Ironman", other: "Outra",
+export type RaceSport = "triathlon" | "run" | "bike" | "swim" | "open_water";
+export const RACE_SPORT_LABEL: Record<RaceSport, string> = {
+  triathlon: "Triatlo", run: "Corrida", bike: "Ciclismo", swim: "Natação (piscina)", open_water: "Natação em águas abertas",
 };
+
+/** Distâncias por desporto (a chave é única entre desportos; "other" serve para todos). */
+export const RACE_DISTANCES: Record<RaceSport, { key: string; label: string }[]> = {
+  triathlon: [
+    { key: "super_sprint", label: "Super Sprint" }, { key: "sprint", label: "Sprint" }, { key: "olympic", label: "Olímpico" },
+    { key: "half", label: "Meio Ironman (70.3)" }, { key: "full", label: "Ironman" }, { key: "other", label: "Outra" },
+  ],
+  run: [
+    { key: "run_5k", label: "5 km" }, { key: "run_10k", label: "10 km" }, { key: "run_half", label: "Meia maratona" },
+    { key: "run_marathon", label: "Maratona" }, { key: "run_trail", label: "Trail" }, { key: "run_ultra", label: "Ultra" }, { key: "other", label: "Outra" },
+  ],
+  bike: [
+    { key: "bike_tt", label: "Contrarrelógio" }, { key: "bike_road", label: "Prova de estrada" }, { key: "bike_granfondo", label: "Granfondo" },
+    { key: "bike_mtb", label: "BTT" }, { key: "other", label: "Outra" },
+  ],
+  swim: [
+    { key: "swim_100", label: "100 m" }, { key: "swim_200", label: "200 m" }, { key: "swim_400", label: "400 m" },
+    { key: "swim_800", label: "800 m" }, { key: "swim_1500", label: "1500 m" }, { key: "other", label: "Outra" },
+  ],
+  open_water: [
+    { key: "ow_1500", label: "1,5 km" }, { key: "ow_3k", label: "3 km" }, { key: "ow_5k", label: "5 km" }, { key: "ow_10k", label: "10 km" }, { key: "other", label: "Outra" },
+  ],
+};
+
+export type RaceDistance = string;
+export const RACE_DISTANCE_LABEL: Record<string, string> = Object.fromEntries(Object.values(RACE_DISTANCES).flat().map((d) => [d.key, d.label]));
+
+/** Desporto de uma distância (provas antigas sem desporto são de triatlo). */
+export function raceSportOf(r: { sport?: RaceSport | null; distance: string }): RaceSport {
+  if (r.sport) return r.sport;
+  const found = (Object.keys(RACE_DISTANCES) as RaceSport[]).find((s) => RACE_DISTANCES[s].some((d) => d.key === r.distance && d.key !== "other"));
+  return found ?? "triathlon";
+}
+export const raceLabel = (r: { sport?: RaceSport | null; distance: string }) =>
+  `${RACE_SPORT_LABEL[raceSportOf(r)]}${r.distance === "other" ? "" : ` · ${RACE_DISTANCE_LABEL[r.distance] ?? r.distance}`}`;
 
 export interface Race {
   id: string;
   date: string;
   name: string;
+  /** desporto da prova (por omissão, triatlo) */
+  sport?: RaceSport;
   distance: RaceDistance;
   priority: "A" | "B" | "C";
   goalTimeS?: number | null;

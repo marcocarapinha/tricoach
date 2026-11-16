@@ -1,7 +1,7 @@
 // Edge Function: calendar-sync
-// Lê o calendário .ics do TrainingPeaks (ou outro) e põe os treinos no plano (planned_sessions, source = 'calendar').
+// Lê um calendário .ics (do treinador ou de outras aplicações) e põe os treinos no plano (planned_sessions, source = 'calendar').
 // Ações (POST JSON { action, ... }):
-//   save-url { url, provider } → valida o endereço, guarda-o no Vault e importa
+//   save-url { url }           → valida o endereço, guarda-o no Vault e importa
 //   sync                       → volta a ler o calendário
 //   remove                     → apaga a ligação (os treinos já importados ficam)
 //   cron                       → (pg_cron, x-cron-secret) lê o calendário de todos os utilizadores ligados
@@ -34,7 +34,7 @@ async function fetchIcs(url: URL): Promise<string> {
     catch (e) { throw new Error(`Não foi possível ler o calendário: ${e instanceof Error ? e.message : e}`); }
     finally { clearTimeout(t); }
     if (r.status >= 300 && r.status < 400 && r.headers.get("location")) { cur = normalizeUrl(new URL(r.headers.get("location")!, cur).toString()); continue; }
-    if (!r.ok) throw new Error(`O calendário respondeu ${r.status}. Confirme o endereço (Settings → Account → Calendar no TrainingPeaks).`);
+    if (!r.ok) throw new Error(`O calendário respondeu ${r.status}. Confirme o endereço de subscrição do calendário.`);
     const len = Number(r.headers.get("content-length") ?? 0);
     if (len > MAX_BYTES) throw new Error("Calendário demasiado grande");
     const buf = new Uint8Array(await r.arrayBuffer());
@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
     switch (body.action) {
       case "save-url": {
         const url = normalizeUrl(String(body.url ?? ""));
-        const provider = body.provider === "other" ? "other" : "trainingpeaks";
+        const provider = "ics";
         const ics = await fetchIcs(url); // valida antes de guardar
         const { error } = await db.rpc("calendar_set_url", { p_user: user.id, p_url: url.toString(), p_provider: provider });
         if (error) throw error;

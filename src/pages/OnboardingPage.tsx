@@ -14,7 +14,8 @@ import { MONTHS_PT, WEEKDAYS_PT, addDays, todayISO } from "@/lib/dates";
 import {
   cssFromTests, fmtMmSs, ftpFrom20min, ftpFromLevel, hrMaxFromAge, lthrFromHrMax, parseMmSs, thresholdPaceFrom10k,
 } from "@/lib/onboarding";
-import { RACE_DISTANCE_LABEL, type AthleteProfile, type RaceDistance } from "@/lib/types";
+import { type AthleteProfile, type RaceSport } from "@/lib/types";
+import { RaceSportDistance } from "@/components/RaceFields";
 import { Logo } from "@/components/Layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -92,7 +93,7 @@ export default function OnboardingPage({ onLater }: { onLater?: () => void }) {
   const [cssText, setCssText] = useState(fmtMmSs(core.profile.css));
   const [t400, setT400] = useState("");
   const [t200, setT200] = useState("");
-  const [race, setRace] = useState({ name: "", date: "", distance: "olympic" as RaceDistance });
+  const [race, setRace] = useState({ name: "", date: "", sport: "triathlon" as RaceSport, distance: "olympic" });
   const [raceSaved, setRaceSaved] = useState(false);
   const [gKey, setGKey] = useState("");
   const [gExp, setGExp] = useState("");
@@ -120,7 +121,7 @@ export default function OnboardingPage({ onLater }: { onLater?: () => void }) {
           if (!v || v < 55 || v > 240) { toast.error("Indique o CSS em minutos:segundos por 100 m, por exemplo 1:45."); return; }
           set({ css: v }); await persist({ css: v });
         } else if (step === "season" && race.name && race.date && !raceSaved) {
-          await store.saveRace({ id: "", name: race.name.trim(), date: race.date, distance: race.distance, priority: "A" });
+          await store.saveRace({ id: "", name: race.name.trim(), date: race.date, sport: race.sport, distance: race.distance, priority: "A" });
           setRaceSaved(true);
           await persist();
         } else await persist();
@@ -347,12 +348,7 @@ export default function OnboardingPage({ onLater }: { onLater?: () => void }) {
                         <div className="grid gap-3 sm:grid-cols-3">
                           <div className="sm:col-span-3"><Field label="Nome"><Input placeholder="Ex.: Triatlo Olímpico de Lisboa" value={race.name} onChange={(e) => setRace({ ...race, name: e.target.value })} /></Field></div>
                           <Field label="Data"><Input type="date" min={todayISO()} max={addDays(todayISO(), 730)} value={race.date} onChange={(e) => setRace({ ...race, date: e.target.value })} /></Field>
-                          <Field label="Distância">
-                            <Select value={race.distance} onValueChange={(v) => setRace({ ...race, distance: v as RaceDistance })}>
-                              <SelectTrigger><SelectValue /></SelectTrigger>
-                              <SelectContent>{Object.entries(RACE_DISTANCE_LABEL).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
-                            </Select>
-                          </Field>
+                          <RaceSportDistance sport={race.sport} distance={race.distance} onChange={(v) => setRace({ ...race, ...v })} />
                         </div>
                       )}
                     </div>
@@ -365,7 +361,7 @@ export default function OnboardingPage({ onLater }: { onLater?: () => void }) {
                     <p className="text-sm text-muted-foreground">Quem define os seus treinos?</p>
                     <PlanSourcePicker value={p.planSource} onChange={(v) => set({ planSource: v })} />
                     {p.planSource === "coach" && (
-                      <Why>Depois, em <b>Época e plano</b>, use <b>Importar Excel</b> para trazer o plano que o treinador lhe envia (a app lê o ficheiro e mostra os treinos para confirmar), ou <b>TrainingPeaks</b> para ler o calendário do TrainingPeaks automaticamente.</Why>
+                      <Why>Depois, em <b>Época e plano</b>, use <b>Importar Excel</b> para trazer o plano que o treinador lhe envia (a app lê o ficheiro e mostra os treinos para confirmar), ou <b>Calendário</b> para ler automaticamente o calendário onde o treinador põe os treinos.</Why>
                     )}
                     <div className="space-y-2 pt-2">
                       <Label>Em que dias costuma descansar?</Label>
