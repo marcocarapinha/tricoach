@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, Download, Flag, Pencil, Plus, Sparkles, Trash2, CheckCircle2, CircleDashed, XCircle, CircleDot, Clock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Flag, Pencil, Plus, Sparkles, Trash2, CheckCircle2, CircleDashed, XCircle, CircleDot, Clock, FileSpreadsheet, CalendarSync, Moon, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { useLoaded } from "@/lib/data/DataProvider";
 import { PageHeader, PHASE_COLOR } from "@/components/common";
@@ -21,6 +21,9 @@ import { cn } from "@/lib/utils";
 import { Dumbbell } from "lucide-react";
 import { RoutineView, useFunctionalProfile } from "@/components/Functional";
 import { buildRoutine, routineToSession, weekSuggestions, MODE_LABEL as FUNC_MODE_LABEL, type Routine } from "@/lib/engine/functional";
+import { restDaysFor } from "@/lib/rest-days";
+import { CoachImportDialog } from "@/components/CoachImport";
+import { CalendarConnectDialog } from "@/components/CalendarConnect";
 
 const fmtHms = (s?: number | null) => (s ? `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}` : "–");
 const parseHms = (v: string) => { const p = v.split(":").map(Number); if (p.some(Number.isNaN)) return null; return p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : p.length === 2 ? p[0] * 3600 + p[1] * 60 : null; };
@@ -115,6 +118,10 @@ function WeekPlanner() {
   const [ws, setWs] = useState(startOfWeek(derived.today));
   const [edit, setEdit] = useState<PlannedSession | null>(null);
   const [confirmGen, setConfirmGen] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [calOpen, setCalOpen] = useState(false);
+  const coach = core.profile.planSource === "coach";
   const we = addDays(ws, 6);
   const sessions = core.planned.filter((s) => s.date >= ws && s.date <= we);
   const acts = core.activities.filter((a) => a.date >= ws && a.date <= we);
@@ -123,18 +130,32 @@ function WeekPlanner() {
   const ctl = (derived.load.find((l) => l.date === addDays(ws, -1)) ?? derived.load.at(-1)!).ctl;
   const target = weekTarget(derived.season, core.races, ws, ctl);
   const raceDates = core.races.filter((r) => r.date >= ws && r.date <= we).map((r) => r.date);
+  const rest = restDaysFor(ws, core.profile, core.weekSettings);
   const fp = useFunctionalProfile();
-  const funcWeek = useMemo(() => (fp.areas.length ? weekSuggestions(core.planned, core.races.map((r) => r.date), ws) : []), [core.planned, core.races, ws, fp.areas.length]);
+  const funcWeek = useMemo(() => (fp.areas.length ? weekSuggestions(core.planned, core.races.map((r) => r.date), ws, 3, rest.days) : []), [core.planned, core.races, ws, fp.areas.length, rest.days.join()]);
   const [routine, setRoutine] = useState<Routine | null>(null);
 
   const generate = async () => {
     if (sessions.length && !confirmGen) { setConfirmGen(true); setTimeout(() => setConfirmGen(false), 4000); return; }
     setConfirmGen(false);
     await store.deletePlanned(sessions.map((s) => s.id));
-    await store.savePlanned(generateWeek(target, core.profile, raceDates));
+    await store.savePlanned(generateWeek(target, core.profile, raceDates, rest.days));
     reload();
     toast.success(`Semana gerada: ${PHASE_LABEL[target.phase]}, ~${target.tss} TSS`);
   };
+  const deleteWeek = async () => {
+    if (!confirmDel) { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 4000); return; }
+    setConfirmDel(false);
+    await store.deletePlanned(sessions.map((s) => s.id));
+    reload();
+    toast.success(`Semana apagada (${sessions.length} sessões)`);
+  };
+  const toggleRest = async (d: number) => {
+    const days = rest.days.includes(d) ? rest.days.filter((x) => x !== d) : [...rest.days, d].sort();
+    await store.saveWeekRestDays(ws, days);
+    reload();
+  };
+  const resetRest = async () => { await store.saveWeekRestDays(ws, null); reload(); };
   const save = async (s: PlannedSession) => { await store.savePlanned([s]); reload(); setEdit(null); toast.success("Sessão guardada"); };
   const remove = async (s: PlannedSession) => { await store.deletePlanned([s.id]); reload(); toast.success("Sessão removida"); };
 
@@ -145,18 +166,32 @@ function WeekPlanner() {
           <CardTitle>Semana de {fmtDatePt(ws)}</CardTitle>
           <CardDescription>
             Fase <span style={{ color: PHASE_COLOR[target.phase] }} className="font-medium">{PHASE_LABEL[target.phase]}</span>
-            {target.recoveryWeek && " · semana de descarga"}{target.bRace && ` · prova B (${target.bRace.name})`} · alvo ~{target.tss} TSS (~{target.hours} h), a partir da forma atual (CTL {Math.round(ctl)})
+            {target.recoveryWeek && " · semana de descarga"}{target.bRace && ` · prova B (${target.bRace.name})`}
+            {coach ? " · plano do treinador (a app não propõe treinos)" : ` · alvo ~${target.tss} TSS (~${target.hours} h), a partir da forma atual (CTL ${Math.round(ctl)})`}
           </CardDescription>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="icon" aria-label="Semana anterior" onClick={() => setWs(addDays(ws, -7))}><ChevronLeft /></Button>
           <Button variant="outline" size="sm" onClick={() => setWs(startOfWeek(derived.today))}>Esta semana</Button>
           <Button variant="outline" size="icon" aria-label="Semana seguinte" onClick={() => setWs(addDays(ws, 7))}><ChevronRight /></Button>
-          <Button variant={confirmGen ? "destructive" : "secondary"} size="sm" onClick={generate}><Sparkles />{confirmGen ? "Substituir semana?" : sessions.length ? "Regenerar" : "Gerar semana"}</Button>
+          {!coach && <Button variant={confirmGen ? "destructive" : "secondary"} size="sm" onClick={generate}><Sparkles />{confirmGen ? "Substituir semana?" : sessions.length ? "Regenerar" : "Gerar semana"}</Button>}
+          <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}><FileSpreadsheet />Importar Excel</Button>
+          <Button variant="outline" size="sm" onClick={() => setCalOpen(true)}><CalendarSync />TrainingPeaks</Button>
+          {!!sessions.length && <Button variant={confirmDel ? "destructive" : "ghost"} size="sm" onClick={deleteWeek}><Trash2 />{confirmDel ? `Apagar ${sessions.length} sessões?` : "Apagar semana"}</Button>}
           <Button size="sm" onClick={() => setEdit(newSession(ws, core.profile))}><Plus />Sessão</Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="flex items-center gap-1.5 text-muted-foreground"><Moon className="h-3.5 w-3.5" />Dias de descanso desta semana:</span>
+          {WEEKDAYS_PT.map((w, k) => (
+            <button key={w} type="button" aria-pressed={rest.days.includes(k)} onClick={() => toggleRest(k)}
+              className={cn("rounded-full border px-2.5 py-1 transition-colors", rest.days.includes(k) ? "border-primary bg-primary/15 text-primary" : "hover:bg-muted")}>{w}</button>
+          ))}
+          <span className="text-muted-foreground">{rest.custom ? "(só esta semana)" : rest.days.length ? "(habituais, do perfil)" : "(a app escolhe)"}</span>
+          {rest.custom && <button className="flex items-center gap-1 text-primary hover:underline" onClick={resetRest}><RotateCcw className="h-3 w-3" />Repor habituais</button>}
+          {!!rest.days.length && <span className="w-full text-[11px] text-muted-foreground">O treino funcional só é sugerido nestes dias{!coach && "; ao gerar a semana, a app não põe treinos aqui"}.</span>}
+        </div>
         <ComplianceStrip comp={comp} />
         <div className="grid gap-3 md:grid-cols-7">
           {Array.from({ length: 7 }, (_, i) => addDays(ws, i)).map((d) => {
@@ -164,9 +199,9 @@ function WeekPlanner() {
             const extra = unplanned.filter((a) => a.date === d);
             const race = core.races.find((r) => r.date === d);
             return (
-              <div key={d} className={cn("min-w-0 rounded-lg border p-2.5", d === derived.today && "border-primary/60 bg-primary/5")}>
+              <div key={d} className={cn("min-w-0 rounded-lg border p-2.5", rest.days.includes(i(d, ws)) && "border-dashed bg-muted/30", d === derived.today && "border-primary/60 bg-primary/5")}>
                 <div className="mb-2 flex items-baseline justify-between">
-                  <span className="text-xs font-semibold">{WEEKDAYS_PT[i(d, ws)]}</span>
+                  <span className="flex items-center gap-1 text-xs font-semibold">{WEEKDAYS_PT[i(d, ws)]}{rest.days.includes(i(d, ws)) && <Moon className="h-3 w-3 text-muted-foreground" aria-label="Dia de descanso" />}</span>
                   <span className="num text-[11px] text-muted-foreground">{Number(d.slice(8))} {MONTHS_PT[month(d) - 1]}</span>
                 </div>
                 {race && <div className="mb-2 flex items-center gap-1.5 rounded-md bg-warn/15 px-2 py-1 text-[11px] font-medium text-warn"><Flag className="h-3 w-3" />{race.name} ({race.priority})</div>}
@@ -197,6 +232,8 @@ function WeekPlanner() {
         </div>
       </CardContent>
       {edit && <SessionDialog key={edit.id || "new"} session={edit} onClose={() => setEdit(null)} onSave={save} />}
+      <CoachImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
+      <CalendarConnectDialog open={calOpen} onClose={() => setCalOpen(false)} />
       {routine && (
         <Dialog open onOpenChange={(o) => !o && setRoutine(null)}>
           <DialogContent className="max-h-[90vh] overflow-y-auto">
@@ -219,7 +256,7 @@ function WeekPlanner() {
 const i = (d: string, ws: string) => diffDays(ws, d);
 
 function newSession(ws: string, p: any): PlannedSession {
-  return { id: "", date: ws, sport: "run", type: "endurance", durationMin: 60, tss: plannedTss("run", "endurance", 60), title: "Corrida · Aeróbio", description: "", steps: buildSteps("run", "endurance", 60, p) };
+  return { id: "", date: ws, sport: "run", type: "endurance", durationMin: 60, tss: plannedTss("run", "endurance", 60), title: "Corrida · Aeróbio", description: "", steps: buildSteps("run", "endurance", 60, p), source: "manual" };
 }
 
 function ComplianceStrip({ comp }: { comp: ReturnType<typeof weekCompliance> }) {
@@ -270,7 +307,8 @@ function SessionCard({ m, onEdit, onDelete }: { m: SessionMatch; onEdit: () => v
       <div className="flex items-start gap-1.5">
         <Icon className={cn("mt-0.5 h-3.5 w-3.5 shrink-0", st.cls)} aria-label={st.label} />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-xs font-medium" title={s.title}>{SESSION_LABEL[s.type]}</div>
+          <div className="truncate text-xs font-medium" title={s.description ? `${s.title}\n${s.description}` : s.title}>{s.source === "coach" || s.source === "calendar" ? s.title.replace(/^[^·]+·\s*/, "") || SESSION_LABEL[s.type] : SESSION_LABEL[s.type]}</div>
+          {(s.source === "coach" || s.source === "calendar") && <div className="text-[10px] font-medium text-secondary">{s.source === "coach" ? "Treinador" : "TrainingPeaks"}</div>}
           <div className="text-muted-foreground">{SPORT_LABEL[s.sport]} · {s.durationMin} min · {s.tss ?? plannedTss(s.sport, s.type, s.durationMin)} TSS</div>
           {m.activity && (
             <Link to={`/atividades/${m.activity.id}`} className={cn("mt-1 block truncate hover:underline", st.cls)}>
@@ -294,7 +332,7 @@ const TYPE_OPTS: SessionType[] = ["recovery", "technique", "endurance", "long", 
 function SessionDialog({ session, onClose, onSave }: { session: PlannedSession | null; onClose: () => void; onSave: (s: PlannedSession) => void }) {
   const { core } = useLoaded();
   const [s, setS] = useState<PlannedSession | null>(session);
-  const [touchedSteps, setTouched] = useState(false);
+  const [touchedSteps, setTouched] = useState(session?.source === "coach" || session?.source === "calendar");
   if (!session || !s) return null;
   const set = (patch: Partial<PlannedSession>) => {
     const n = { ...s, ...patch };

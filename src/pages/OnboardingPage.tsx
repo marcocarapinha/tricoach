@@ -3,14 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft, ArrowRight, Bell, Bike, CalendarRange, Check, CheckCircle2, Download, Dumbbell, HeartPulse, HelpCircle,
-  KeyRound, Loader2, ShieldAlert, Sparkles, User, Waves, Footprints,
+  ClipboardList, KeyRound, Loader2, ShieldAlert, Sparkles, User, Waves, Footprints,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useLoaded } from "@/lib/data/DataProvider";
 import { AREAS, EQUIPMENT, LEVEL_LABEL, MAX_AREAS } from "@/lib/engine/functional";
 import { enablePush, pushSupported } from "@/lib/push";
 import { useInstall } from "@/lib/install";
-import { MONTHS_PT, addDays, todayISO } from "@/lib/dates";
+import { MONTHS_PT, WEEKDAYS_PT, addDays, todayISO } from "@/lib/dates";
 import {
   cssFromTests, fmtMmSs, ftpFrom20min, ftpFromLevel, hrMaxFromAge, lthrFromHrMax, parseMmSs, thresholdPaceFrom10k,
 } from "@/lib/onboarding";
@@ -25,9 +25,10 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InstallAppButton } from "@/components/AppActions";
 import { DisclaimerText } from "@/components/Disclaimer";
+import { PlanSourcePicker, RestDaysPicker } from "@/components/PlanPrefs";
 import { cn } from "@/lib/utils";
 
-type StepId = "welcome" | "about" | "heart" | "bike" | "run" | "swim" | "season" | "functional" | "garmin" | "notify" | "done";
+type StepId = "welcome" | "about" | "heart" | "bike" | "run" | "swim" | "season" | "plan" | "functional" | "garmin" | "notify" | "done";
 const STEP_META: Record<StepId, { title: string; icon: typeof User }> = {
   welcome: { title: "Bem-vindo", icon: Sparkles },
   about: { title: "Sobre si", icon: User },
@@ -36,6 +37,7 @@ const STEP_META: Record<StepId, { title: string; icon: typeof User }> = {
   run: { title: "Corrida", icon: Footprints },
   swim: { title: "Natação", icon: Waves },
   season: { title: "Época e prova", icon: CalendarRange },
+  plan: { title: "Plano e descanso", icon: ClipboardList },
   functional: { title: "Treino funcional", icon: Dumbbell },
   garmin: { title: "Garmin", icon: KeyRound },
   notify: { title: "Notificações", icon: Bell },
@@ -76,7 +78,7 @@ export default function OnboardingPage({ onLater }: { onLater?: () => void }) {
   const navigate = useNavigate();
   const [p, setP] = useState<AthleteProfile>({ ...core.profile, name: core.profile.name === "Atleta" ? "" : core.profile.name });
   const set = (patch: Partial<AthleteProfile>) => setP((x) => ({ ...x, ...patch }));
-  const steps = useMemo<StepId[]>(() => ["welcome", "about", "heart", "bike", "run", "swim", "season", "functional", ...(store.mode === "supabase" ? ["garmin" as const] : []), "notify", "done"], [store.mode]);
+  const steps = useMemo<StepId[]>(() => ["welcome", "about", "heart", "bike", "run", "swim", "season", "plan", "functional", ...(store.mode === "supabase" ? ["garmin" as const] : []), "notify", "done"], [store.mode]);
   const [i, setI] = useState(0);
   const [dir, setDir] = useState(1);
   const [saving, setSaving] = useState(false);
@@ -358,6 +360,21 @@ export default function OnboardingPage({ onLater }: { onLater?: () => void }) {
                   </>
                 )}
 
+                {step === "plan" && (
+                  <>
+                    <p className="text-sm text-muted-foreground">Quem define os seus treinos?</p>
+                    <PlanSourcePicker value={p.planSource} onChange={(v) => set({ planSource: v })} />
+                    {p.planSource === "coach" && (
+                      <Why>Depois, em <b>Época e plano</b>, use <b>Importar Excel</b> para trazer o plano que o treinador lhe envia (a app lê o ficheiro e mostra os treinos para confirmar), ou <b>TrainingPeaks</b> para ler o calendário do TrainingPeaks automaticamente.</Why>
+                    )}
+                    <div className="space-y-2 pt-2">
+                      <Label>Em que dias costuma descansar?</Label>
+                      <RestDaysPicker value={p.restDays} onChange={(v) => set({ restDays: v })} />
+                    </div>
+                    <Why>Os dias de descanso são os melhores para o treino funcional (força e prevenção). {p.planSource === "app" ? "A app também não põe treinos nesses dias quando gera a semana." : ""}</Why>
+                  </>
+                )}
+
                 {step === "functional" && (
                   <>
                     <p className="text-sm text-muted-foreground">Onde costuma ter problemas ou sente que precisa de reforço? Toque por ordem de prioridade; as primeiras {MAX_AREAS} entram nas rotinas.</p>
@@ -460,6 +477,8 @@ export default function OnboardingPage({ onLater }: { onLater?: () => void }) {
                         ["Peso", `${p.weight} kg`],
                         ["Sono", `${p.sleepTargetH} h`],
                         ["Prova A", raceSaved ? race.name : "–"],
+                        ["Plano", p.planSource === "coach" ? "do treinador" : "proposto pela app"],
+                        ["Descanso", p.restDays.length ? p.restDays.map((d) => WEEKDAYS_PT[d]).join(", ") : "a app escolhe"],
                         ["Zonas funcionais", p.functionalAreas.length ? `${p.functionalAreas.length}` : "–"],
                         ["Notificações", p.notifyEnabled ? `${String(p.notifyHour).padStart(2, "0")}:00` : "desligadas"],
                       ].map(([k, v]) => (<div key={k}><dt className="text-xs text-muted-foreground">{k}</dt><dd className="font-medium">{v}</dd></div>))}

@@ -122,6 +122,24 @@ A página **Hoje** mostra a rotina do dia e a página **Época e plano** marca o
 
 A biblioteca (`src/lib/engine/functional.ts`) tem 50 exercícios, cada um com ilustração (posição inicial → final), com doses por nível e instruções. Os exercícios rodam entre sessões. As ilustrações são desenhadas em código (`src/components/figures`): uma figura esquemática com comprimentos fixos, poses definidas por ângulos e o material (degrau, elástico, banco, parede) nas cores do tema. A página **Exercícios** mostra a biblioteca com filtros por zona. A rotina pode ser marcada como feita (tabela `functional_log`), juntada ao plano como sessão "Força · Funcional" ou exportada em FIT.
 
+## Plano do treinador, dias de descanso e TrainingPeaks
+
+- **Quem faz o plano:** escolhe-se no assistente ou em Definições → Plano de treino.
+  - **A app** gera as semanas a partir da periodização.
+  - **Com treinador**, a app não propõe treinos: importa-os e compara o planeado com o feito.
+- **Dias de descanso:** os habituais ficam no perfil e podem ser mudados semana a semana em Época e plano (tabela `week_settings`).
+  - O treino funcional só é sugerido nesses dias: rotina completa se o dia estiver livre, curta se tiver treino leve.
+  - Ao gerar uma semana, a app passa as sessões desses dias para o dia livre mais próximo.
+- **Apagar semana:** botão no planeador semanal, com confirmação.
+- **Importar Excel/CSV** (`src/lib/coach-import.ts`, leitura no browser com ExcelJS carregado só quando é preciso):
+  - Arrumações reconhecidas: lista com datas, grelha semanal (dias em colunas ou em linhas, com data ou «Semana N») ou células soltas.
+  - O texto de cada treino é lido por `supabase/functions/_shared/workout-text.ts`, que entende português e inglês: modalidade, duração, distância (com séries), tipo e descanso.
+  - Antes de gravar, tudo pode ser revisto e corrigido: data, modalidade, tipo, minutos e título.
+- **TrainingPeaks:** a API oficial só é concedida a parceiros comerciais, não para uso pessoal.
+  - A app usa a sincronização de calendário .ics do TrainingPeaks (Premium: Settings → Account → Calendar). Traz os treinos de 5 dias para trás e 14 para a frente; o TrainingPeaks pode demorar até 24 h a refletir alterações.
+  - O endereço fica no Vault. A Edge Function `calendar-sync` lê-o a pedido e de 3 em 3 horas (pg_cron), e só aceita endereços https públicos.
+  - Funciona também com outros calendários .ics.
+
 ## Publicação (Vercel + Supabase)
 
 - **Supabase:** projeto `tricoach` (ref `macbjkbtgpumoqecncbu`, região eu-west-3). Migrações aplicadas, Edge Functions publicadas e agendamentos ativos: `tricoach-garmin-sync` ao minuto 7 de cada hora e `tricoach-notify` ao minuto 15.

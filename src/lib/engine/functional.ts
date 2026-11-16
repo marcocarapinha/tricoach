@@ -265,8 +265,9 @@ export interface DaySuggestion { date: string; kind: DayKind; mode: RoutineMode 
  * Sugestões para os 7 dias a partir de `weekStart`: rotina completa nos dias de descanso (até 3),
  * curta nos dias leves se houver menos de 2 dias de descanso; nada em dias duros, de prova ou na véspera de prova.
  */
-export function weekSuggestions(planned: PlannedSession[], raceDates: string[], weekStart: string, target = 3): DaySuggestion[] {
+export function weekSuggestions(planned: PlannedSession[], raceDates: string[], weekStart: string, target = 3, restDays: number[] = []): DaySuggestion[] {
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  if (restDays.length) return restDaySuggestions(planned, raceDates, days, restDays);
   const info = days.map((date) => {
     const kind = classifyDay(planned.filter((s) => s.date === date), raceDates.includes(date));
     const preRace = raceDates.includes(addDays(date, 1));
@@ -295,6 +296,23 @@ export function weekSuggestions(planned: PlannedSession[], raceDates: string[], 
   return out;
 }
 
+/** Com dias de descanso definidos pelo atleta: rotina só nesses dias (completa se o dia estiver livre, curta se tiver treino leve). */
+function restDaySuggestions(planned: PlannedSession[], raceDates: string[], days: string[], restDays: number[]): DaySuggestion[] {
+  const rest = new Set(restDays);
+  return days.map((date, i) => {
+    const kind = classifyDay(planned.filter((s) => s.date === date), raceDates.includes(date));
+    const preRace = raceDates.includes(addDays(date, 1));
+    const avoidHeavy = nextDayHardRun(planned, date);
+    if (!rest.has(i)) return { date, kind, mode: null, avoidHeavy, reason: "Dia de treino: o funcional fica para os dias de descanso." };
+    if (kind === "race") return { date, kind, mode: null, avoidHeavy, reason: "Dia de prova." };
+    if (preRace) return { date, kind, mode: null, avoidHeavy, reason: "Véspera de prova: só descanso." };
+    if (kind === "hard") return { date, kind, mode: null, avoidHeavy, reason: "Este dia de descanso tem um treino duro planeado." };
+    return kind === "rest"
+      ? { date, kind, mode: "full", avoidHeavy, reason: "Dia de descanso escolhido por si: força e prevenção." }
+      : { date, kind, mode: "short", avoidHeavy, reason: "Dia de descanso com treino leve: rotina curta." };
+  });
+}
+
 /** Converte a rotina numa sessão planeada (Força · Funcional), exportável para FIT. */
 export function routineToSession(r: Routine): PlannedSession {
   const steps: SimpleStep[] = r.items.map((it) => ({ kind: "step", intensity: it.exercise.kind === "mobility" ? "warmup" : "active", durationS: it.exercise.minutes * 60, target: { type: "open" }, name: it.exercise.name.slice(0, 15) }));
@@ -303,6 +321,7 @@ export function routineToSession(r: Routine): PlannedSession {
     title: `Funcional · ${r.areas.map((a) => AREA_LABEL[a].split(" ")[0]).join(", ") || "geral"}`,
     description: r.items.map((it) => `${it.exercise.name}: ${it.dose}`).join(" · "),
     steps,
+    source: "functional",
   };
 }
 

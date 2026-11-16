@@ -1,4 +1,4 @@
-import type { Activity, ActivityStreams, AthleteProfile, CheckIn, Dashboard, FunctionalLog, GarminConnection, PlannedSession, Race, Suggestion, SuggestionStatus, Wellness } from "../types";
+import type { Activity, ActivityStreams, AthleteProfile, CheckIn, Dashboard, FunctionalLog, GarminConnection, PlannedSession, Race, Suggestion, SuggestionStatus, WeekSetting, Wellness } from "../types";
 import { DEFAULT_PROFILE } from "../types";
 import type { StatsQuery } from "../engine/stats";
 import { demoCheckins, demoRaces, demoStreams, generateDemo } from "../demo";
@@ -20,11 +20,15 @@ export interface CoreData {
   planned: PlannedSession[];
   checkins: CheckIn[];
   functionalLog: FunctionalLog[];
+  /** dias de descanso escolhidos para semanas concretas */
+  weekSettings: WeekSetting[];
   /** derivado de `races`: a próxima prova (qualquer prioridade) */
   nextRace: NextRace | null;
 }
 
 export interface PushSubscriptionInput { endpoint: string; keys: { p256dh: string; auth: string } }
+
+export interface CalendarFeed { provider: string; status: "connected" | "error"; lastSyncAt: string | null; lastError: string | null; events: number }
 
 export interface BackfillStep { done: boolean; progress: number; from?: string; to?: string; records?: number; errors?: string[] }
 
@@ -58,6 +62,13 @@ export interface Store {
   garminSaveKey(apiKey: string, expiresAt: string | null): Promise<void>;
   garminSync(): Promise<{ total: number; errors: string[] }>;
   garminBackfillStep(): Promise<BackfillStep>;
+  /** dias de descanso de uma semana (null = voltar aos habituais) */
+  saveWeekRestDays(weekStart: string, restDays: number[] | null): Promise<void>;
+  /** calendário externo (.ics do TrainingPeaks ou outro) */
+  calendarStatus(): Promise<CalendarFeed | null>;
+  calendarConnect(url: string, provider: string): Promise<{ imported: number }>;
+  calendarSync(): Promise<{ imported: number }>;
+  calendarRemove(): Promise<void>;
 }
 
 const toNext = (races: Race[]): NextRace | null => { const r = findNextRace(races, todayISO()); return r ? { date: r.date, name: r.name, priority: r.priority } : null; };
@@ -72,7 +83,7 @@ function demoPlan(acts: Activity[], races: Race[], profile: AthleteProfile, toda
   for (let ws = first; ws <= last; ws = addDays(ws, 7)) {
     const ctl = (load.find((l) => l.date === addDays(ws, -1)) ?? load.at(-1)!).ctl;
     const raceDates = races.filter((r) => r.date >= ws && r.date <= addDays(ws, 6)).map((r) => r.date);
-    out.push(...generateWeek(weekTarget(segs, races, ws, ctl), profile, raceDates).map((s, i) => ({ ...s, id: `plan-${s.date}-${i}` })));
+    out.push(...generateWeek(weekTarget(segs, races, ws, ctl), profile, raceDates, profile.restDays ?? []).map((s, i) => ({ ...s, id: `plan-${s.date}-${i}` })));
   }
   return out;
 }
@@ -100,7 +111,8 @@ export function demoStore(): Store {
       const races = lsGet<Race[] | null>("races", null) ?? demoRaces(d.activities);
       lsSet("races", races);
       let planned = lsGet<PlannedSession[] | null>("planned", null);
-      if (!planned) { planned = demoPlan(d.activities, races, profile); lsSet("planned", planned); }
+      if (!planned) { planned = profile.planSource === "coach" ? [] : demoPlan(d.activities, races, profile); lsSet("planned", planned); }
+      const weekSettings = lsGet<WeekSetting[]>("weeks", []);
       const checkins = lsGet<CheckIn[] | null>("checkins", null) ?? demoCheckins();
       lsSet("checkins", checkins);
       const functionalLog = lsGet<FunctionalLog[] | null>("functional", null) ?? [
@@ -108,7 +120,7 @@ export function demoStore(): Store {
         { date: addDays(todayISO(), -3), mode: "full", minutes: 25, exercises: ["calf_iso", "bridge_walkout"], areas: ["achilles", "hamstrings"] },
       ] as FunctionalLog[];
       lsSet("functional", functionalLog);
-      cache = { activities: d.activities, wellness: d.wellness, profile, races, planned, checkins, functionalLog, nextRace: toNext(races) };
+      cache = { activities: d.activities, wellness: d.wellness, profile, races, planned, checkins, functionalLog, weekSettings, nextRace: toNext(races) };
       return cache;
     },
     async saveProfile(p) { lsSet("profile", p); if (cache) cache = { ...cache, profile: p }; },
@@ -132,6 +144,14 @@ export function demoStore(): Store {
     async deleteFunctionalLog(date) { const xs = lsGet<FunctionalLog[]>("functional", []).filter((x) => x.date !== date); lsSet("functional", xs); if (cache) cache = { ...cache, functionalLog: xs }; },
     async getStreams(a) { return demoStreams(a, cache?.profile ?? DEFAULT_PROFILE); },
     async savePushSubscription() { /* modo demo: só notificações locais */ },
+    async saveWeekRestDays(weekStart, restDays) {
+      const xs = lsGet<WeekSetting[]>("weeks", []).filter((w) => w.weekStart !== weekStart).concat(restDays ? [{ weekStart, restDays }] : []);
+      lsSet("weeks", xs); if (cache) cache = { ...cache, weekSettings: xs };
+    },
+    async calendarStatus() { return null; },
+    async calendarConnect() { throw new Error("A ligação ao calendário precisa de uma conta (não funciona no modo demo)."); },
+    async calendarSync() { return { imported: 0 }; },
+    async calendarRemove() { /* modo demo */ },
     async deletePushSubscription() { /* modo demo */ },
     async sendTestNotification() {
       const reg = await navigator.serviceWorker?.getRegistration();
@@ -222,12 +242,16 @@ async function invoke<T>(action: string, extra: Record<string, unknown> = {}): P
   return data as T;
 }
 
+function plannedFromRow(x: any): PlannedSession {
+  return { id: x.id, date: x.day, sport: x.sport, type: x.session_type, durationMin: x.duration_min, tss: x.tss == null ? null : Number(x.tss), title: x.title, description: x.description, steps: x.steps, source: x.source ?? "app", externalId: x.external_id ?? null };
+}
+
 export function supabaseStore(): Store {
   const sb = supabase!;
   return {
     mode: "supabase",
     async loadCore() {
-      const [acts, well, prof, racesQ, plannedQ, checkQ, funcQ] = await Promise.all([
+      const [acts, well, prof, racesQ, plannedQ, checkQ, funcQ, weeksQ] = await Promise.all([
         fetchAll<any>("activities", "start_time", "id,garmin_id,start_time,activity_date,sport,sub_sport,name,duration_s,distance_m,elevation_m,avg_hr,max_hr,avg_power,norm_power,calories,tss,zone_seconds,gear,session_type,bests"),
         fetchAll<any>("daily_wellness", "day", "day,sleep_s,sleep_score,deep_s,rem_s,light_s,awake_s,hrv,rhr,stress_avg,bb_morning,steps,hydration_ml"),
         sb.from("athlete_profile").select("*").maybeSingle(),
@@ -235,6 +259,7 @@ export function supabaseStore(): Store {
         fetchAll<any>("planned_sessions", "day"),
         sb.from("checkins").select("*").gte("day", addDays(todayISO(), -400)),
         sb.from("functional_log").select("*").gte("day", addDays(todayISO(), -400)),
+        sb.from("week_settings").select("week_start, rest_days").gte("week_start", addDays(todayISO(), -120)),
       ]);
       const races: Race[] = (racesQ.data ?? []).map((r: any) => ({ id: r.id, date: r.race_date, name: r.name, distance: r.distance, priority: r.priority, goalTimeS: r.goal_time_s, resultTimeS: r.result_time_s, location: r.location, notes: r.notes }));
       const r = prof.data;
@@ -244,13 +269,16 @@ export function supabaseStore(): Store {
         weights: { ...DEFAULT_PROFILE.weights, ...(r.readiness_weights ?? {}) },
         notifyEnabled: !!r.notify_enabled, notifyHour: r.notify_hour ?? 7, timezone: r.timezone ?? "Europe/Lisbon",
         functionalAreas: r.functional_areas ?? [], functionalLevel: r.functional_level ?? "intermediate", functionalEquipment: r.functional_equipment ?? ["band", "step"],
+        planSource: r.plan_source === "coach" ? "coach" : "app",
+        restDays: r.rest_days ?? [],
         onboardedAt: r.onboarded_at ?? null,
       } : DEFAULT_PROFILE;
       return {
         profile,
         races,
         nextRace: toNext(races),
-        planned: plannedQ.map((x: any) => ({ id: x.id, date: x.day, sport: x.sport, type: x.session_type, durationMin: x.duration_min, tss: x.tss == null ? null : Number(x.tss), title: x.title, description: x.description, steps: x.steps })),
+        planned: plannedQ.map(plannedFromRow),
+        weekSettings: (weeksQ.data ?? []).map((w: any) => ({ weekStart: w.week_start, restDays: w.rest_days ?? [] })),
         checkins: (checkQ.data ?? []).map((c: any) => ({ date: c.day, energy: c.energy, soreness: c.soreness, mood: c.mood, motivation: c.motivation, notes: c.notes })),
         functionalLog: (funcQ.data ?? []).map((f: any) => ({ date: f.day, mode: f.mode, minutes: f.minutes, exercises: f.exercises ?? [], areas: f.areas ?? [] })),
         activities: acts.map((a) => ({
@@ -271,6 +299,7 @@ export function supabaseStore(): Store {
         weight: p.weight, sleep_target_h: p.sleepTargetH, season_start_month: p.seasonStartMonth, readiness_weights: p.weights,
         notify_enabled: p.notifyEnabled, notify_hour: p.notifyHour, timezone: p.timezone,
         functional_areas: p.functionalAreas, functional_level: p.functionalLevel, functional_equipment: p.functionalEquipment,
+        plan_source: p.planSource, rest_days: p.restDays,
         onboarded_at: p.onboardedAt ?? null, updated_at: new Date().toISOString(),
       });
       if (error) throw error;
@@ -285,10 +314,20 @@ export function supabaseStore(): Store {
     async deleteRace(id) { const { error } = await sb.from("races").delete().eq("id", id); if (error) throw error; },
     async savePlanned(sessions) {
       const user_id = await userId();
-      const rows = sessions.map((x) => ({ ...(/^[0-9a-f-]{36}$/i.test(x.id) ? { id: x.id } : {}), user_id, day: x.date, sport: x.sport, session_type: x.type, duration_min: x.durationMin, tss: x.tss ?? null, title: x.title, description: x.description ?? null, steps: x.steps ?? null }));
-      const { data, error } = await sb.from("planned_sessions").upsert(rows).select();
-      if (error) throw error;
-      return (data ?? []).map((x: any) => ({ id: x.id, date: x.day, sport: x.sport, type: x.session_type, durationMin: x.duration_min, tss: x.tss == null ? null : Number(x.tss), title: x.title, description: x.description, steps: x.steps }));
+      const row = (x: PlannedSession) => ({ user_id, day: x.date, sport: x.sport, session_type: x.type, duration_min: x.durationMin, tss: x.tss ?? null, title: x.title, description: x.description ?? null, steps: x.steps ?? null, source: x.source ?? "manual", external_id: x.externalId ?? null });
+      // novas e existentes em pedidos separados (o upsert em lote precisa das mesmas colunas em todas as linhas)
+      const isId = (id: string) => /^[0-9a-f-]{36}$/i.test(id);
+      const out: PlannedSession[] = [];
+      const existing = sessions.filter((x) => isId(x.id)).map((x) => ({ id: x.id, ...row(x) }));
+      const fresh = sessions.filter((x) => !isId(x.id)).map(row);
+      for (const batch of [existing, fresh]) {
+        for (let i = 0; i < batch.length; i += 200) {
+          const { data, error } = await sb.from("planned_sessions").upsert(batch.slice(i, i + 200) as any[]).select();
+          if (error) throw error;
+          out.push(...(data ?? []).map(plannedFromRow));
+        }
+      }
+      return out;
     },
     async deletePlanned(ids) { if (!ids.length) return; const { error } = await sb.from("planned_sessions").delete().in("id", ids); if (error) throw error; },
     async saveCheckin(c) {
@@ -312,6 +351,32 @@ export function supabaseStore(): Store {
       if (error) throw error;
     },
     async deletePushSubscription(endpoint) { await sb.from("push_subscriptions").delete().eq("endpoint", endpoint); },
+    async saveWeekRestDays(weekStart, restDays) {
+      const user_id = await userId();
+      const { error } = restDays
+        ? await sb.from("week_settings").upsert({ user_id, week_start: weekStart, rest_days: restDays, updated_at: new Date().toISOString() })
+        : await sb.from("week_settings").delete().eq("week_start", weekStart);
+      if (error) throw error;
+    },
+    async calendarStatus() {
+      const { data, error } = await sb.from("calendar_feed").select("*").maybeSingle();
+      if (error) throw error;
+      return data ? { provider: data.provider, status: data.status, lastSyncAt: data.last_sync_at, lastError: data.last_error, events: data.events } : null;
+    },
+    async calendarConnect(url, provider) {
+      const { data, error } = await sb.functions.invoke("calendar-sync", { body: { action: "save-url", url, provider } });
+      if (error) throw await functionError(error, "calendar-sync");
+      return { imported: Number((data as any)?.imported ?? 0) };
+    },
+    async calendarSync() {
+      const { data, error } = await sb.functions.invoke("calendar-sync", { body: { action: "sync" } });
+      if (error) throw await functionError(error, "calendar-sync");
+      return { imported: Number((data as any)?.imported ?? 0) };
+    },
+    async calendarRemove() {
+      const { error } = await sb.functions.invoke("calendar-sync", { body: { action: "remove" } });
+      if (error) throw await functionError(error, "calendar-sync");
+    },
     async vapidPublicKey() {
       const { data, error } = await sb.functions.invoke("notify", { body: { action: "public-key" } });
       if (error) throw await functionError(error, "notify");

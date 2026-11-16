@@ -103,6 +103,10 @@ export interface AthleteProfile {
   functionalLevel: "beginner" | "intermediate" | "advanced";
   /** material disponível além do peso corporal */
   functionalEquipment: string[];
+  /** 'app': a app propõe o plano · 'coach': tem treinador e importa os treinos */
+  planSource: "app" | "coach";
+  /** dias de descanso habituais (0 = segunda … 6 = domingo); vazio = a app escolhe */
+  restDays: number[];
   /** quando o assistente inicial foi concluído (null = ainda não) */
   onboardedAt?: string | null;
 }
@@ -124,6 +128,8 @@ export const DEFAULT_PROFILE: AthleteProfile = {
   functionalAreas: [],
   functionalLevel: "intermediate",
   functionalEquipment: ["band", "step"],
+  planSource: "app",
+  restDays: [],
   onboardedAt: null,
 };
 
@@ -208,7 +214,13 @@ export interface PlannedSession {
   title: string;
   description?: string | null;
   steps?: WorkoutStep[] | null;
+  /** origem: gerada pela app, criada à mão, do treinador (Excel), do calendário externo ou rotina funcional */
+  source?: "app" | "manual" | "coach" | "calendar" | "functional";
+  /** id no calendário externo (UID do .ics) */
+  externalId?: string | null;
 }
+
+export interface WeekSetting { weekStart: string; restDays: number[] }
 
 export interface CheckIn {
   date: string;

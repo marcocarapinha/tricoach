@@ -11,6 +11,7 @@ import { useLoaded } from "@/lib/data/DataProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/common";
 import { SecurityCard } from "@/components/auth/SecurityCard";
+import { PlanSourcePicker, RestDaysPicker } from "@/components/PlanPrefs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -183,6 +184,15 @@ function ProfileCard() {
               <SelectContent>{MONTHS_PT.map((m, i) => <SelectItem key={m} value={String(i + 1)}>{m}</SelectItem>)}</SelectContent>
             </Select>
           </div>
+        </div>
+
+        <div className="space-y-3 rounded-lg border p-4">
+          <div>
+            <div className="text-sm font-semibold">Plano de treino</div>
+            <p className="text-xs text-muted-foreground">Quem define os seus treinos e em que dias descansa.</p>
+          </div>
+          <PlanSourcePicker value={p.planSource} onChange={(v) => set({ planSource: v })} />
+          <div className="space-y-1"><Label>Dias de descanso habituais</Label><RestDaysPicker value={p.restDays} onChange={(v) => set({ restDays: v })} /></div>
         </div>
 
         <div className="grid gap-3 rounded-lg bg-muted/40 p-3 text-xs md:grid-cols-2">

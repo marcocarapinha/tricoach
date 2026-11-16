@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CalendarPlus, Check, ChevronDown, Download, Dumbbell, Info, RotateCcw, Undo2 } from "lucide-react";
 import { toast } from "sonner";
+import { restDaysFor } from "@/lib/rest-days";
 import { useLoaded } from "@/lib/data/DataProvider";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,7 @@ export function useFunctionalProfile(): FunctionalProfile {
 export function useWeekFunctional(date: string): DaySuggestion[] {
   const { core } = useLoaded();
   const ws = startOfWeek(date);
-  return useMemo(() => weekSuggestions(core.planned, core.races.map((r) => r.date), ws), [core.planned, core.races, ws]);
+  return useMemo(() => weekSuggestions(core.planned, core.races.map((r) => r.date), ws, 3, restDaysFor(ws, core.profile, core.weekSettings).days), [core.planned, core.races, ws, core.profile, core.weekSettings]);
 }
 
 /** Lista de exercícios de uma rotina, com instruções expansíveis. */

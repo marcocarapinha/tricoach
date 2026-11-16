@@ -427,3 +427,7 @@ verify_jwt = true
 [functions.notify]
 # false: também é chamada pelo pg_cron (x-cron-secret); os utilizadores são validados no código (_shared/auth.ts)
 verify_jwt = false
+
+[functions.calendar-sync]
+# false: também é chamada pelo pg_cron (x-cron-secret); os utilizadores são validados no código (_shared/auth.ts)
+verify_jwt = false

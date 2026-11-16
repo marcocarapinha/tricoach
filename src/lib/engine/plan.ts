@@ -47,10 +47,11 @@ const round5 = (x: number) => Math.max(20, Math.round(x / 5) * 5);
 const uid = () => (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : Math.random().toString(36).slice(2));
 
 /** Gera as sessões da semana com o modelo da fase, escaladas para o TSS-alvo. Dias de prova B/A ficam livres. */
-export function generateWeek(target: WeekTarget, p: AthleteProfile, raceDates: string[] = []): PlannedSession[] {
+export function generateWeek(target: WeekTarget, p: AthleteProfile, raceDates: string[] = [], restDays: number[] = []): PlannedSession[] {
   const ws = startOfWeek(target.weekStart);
   // dia da prova e véspera ficam livres
-  const slots = TEMPLATES[target.phase].filter(([d]) => !raceDates.includes(addDays(ws, d)) && !raceDates.includes(addDays(ws, d + 1)));
+  const blocked = (d: number) => raceDates.includes(addDays(ws, d)) || raceDates.includes(addDays(ws, d + 1));
+  const slots = placeSlots(TEMPLATES[target.phase].filter(([d]) => !blocked(d)), restDays, blocked);
   // TSS por unidade de peso (1 unidade = 60 min)
   const unitTss = slots.reduce((s, [, sp, ty, w]) => s + plannedTss(sp, ty, 60 * w), 0) || 1;
   const k = target.tss / unitTss;
@@ -63,8 +64,31 @@ export function generateWeek(target: WeekTarget, p: AthleteProfile, raceDates: s
       title: `${SPORT_LABEL[sport]} · ${SESSION_LABEL[type]}`,
       description: describe(sport, type, durationMin),
       steps,
+      source: "app" as const,
     };
   });
+}
+
+/**
+ * Tira as sessões dos dias de descanso escolhidos pelo atleta e passa-as para o dia livre mais próximo
+ * (no máximo 2 sessões por dia). Se não houver lugar, a sessão cai e o TSS é redistribuído pelas restantes.
+ */
+export function placeSlots(slots: Slot[], restDays: number[], blocked: (d: number) => boolean = () => false): Slot[] {
+  if (!restDays.length) return slots;
+  const rest = new Set(restDays);
+  const count = new Map<number, number>();
+  const kept: Slot[] = slots.filter(([d]) => !rest.has(d));
+  for (const [d] of kept) count.set(d, (count.get(d) ?? 0) + 1);
+  for (const s of slots.filter(([d]) => rest.has(d))) {
+    const [d] = s;
+    const cand = [1, -1, 2, -2, 3, -3].map((o) => d + o).filter((x) => x >= 0 && x <= 6 && !rest.has(x) && !blocked(x) && (count.get(x) ?? 0) < 2);
+    // não juntar duas sessões da mesma modalidade no mesmo dia
+    const target = cand.find((x) => !kept.some(([kd, ks]) => kd === x && ks === s[1])) ?? cand[0];
+    if (target == null) continue;
+    kept.push([target, s[1], s[2], s[3]]);
+    count.set(target, (count.get(target) ?? 0) + 1);
+  }
+  return kept.sort((a, b) => a[0] - b[0]);
 }
 
 function describe(sport: Sport, type: SessionType, min: number) {
