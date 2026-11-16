@@ -7,6 +7,7 @@ import { useData } from "@/lib/data/DataProvider";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { cn } from "@/lib/utils";
+import { InstallAppButton, SignOutButton } from "@/components/AppActions";
 
 const NAV = [
   { to: "/", label: "Hoje", icon: Sun, end: true },
@@ -41,7 +42,7 @@ export default function Layout() {
   const [more, setMore] = useState(false);
   return (
     <div className="min-h-screen">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r bg-card/40 px-4 py-6 backdrop-blur md:flex">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col overflow-y-auto border-r bg-card/40 px-4 py-6 backdrop-blur md:flex">
         <div className="flex items-center justify-between px-2"><Logo /><ThemeToggle /></div>
         <nav className="mt-10 flex flex-col gap-1">
           {NAV.map((n) => (
@@ -55,7 +56,11 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
-        <div className="mt-auto space-y-2 px-2 text-xs text-muted-foreground">
+        <div className="mt-auto space-y-1 border-t pt-3">
+          <InstallAppButton />
+          <SignOutButton />
+        </div>
+        <div className="mt-3 space-y-2 px-2 text-xs text-muted-foreground">
           {store.mode === "demo" && <Badge variant="warn"><Gauge className="h-3 w-3" />Modo demo</Badge>}
           {core && <div>{core.profile.name} · {core.activities.length.toLocaleString("pt-PT")} atividades</div>}
         </div>
@@ -92,6 +97,10 @@ export default function Layout() {
                 <n.icon className="h-4 w-4" />{n.label}
               </NavLink>
             ))}
+            <div className="mt-2 space-y-1 border-t pt-2">
+              <InstallAppButton onDone={() => setMore(false)} />
+              <SignOutButton onDone={() => setMore(false)} />
+            </div>
           </div>
         </DialogContent>
       </Dialog>

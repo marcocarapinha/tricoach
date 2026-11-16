@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [{ "source": "/((?!assets/|sw\\.js|manifest\\.webmanifest|icon\\.svg|theme-init\\.js).*)", "destination": "/index.html" }],
+  "rewrites": [{ "source": "/((?!assets/|sw\\.js|manifest\\.webmanifest|icon\\.svg|icon-192\\.png|icon-512\\.png|icon-maskable-512\\.png|apple-touch-icon\\.png|theme-init\\.js).*)", "destination": "/index.html" }],
   "headers": [
     {
       "source": "/(.*)",
