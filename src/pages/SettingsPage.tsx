@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Bell, CheckCircle2, CloudDownload, KeyRound, Loader2, LogOut, RefreshCw, Send } from "lucide-react";
+import { AlertTriangle, Bell, CheckCircle2, Sparkles, CloudDownload, KeyRound, Loader2, LogOut, RefreshCw, Send } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AREAS, EQUIPMENT, LEVEL_LABEL as FUNC_LEVEL_LABEL } from "@/lib/engine/functional";
@@ -24,6 +25,18 @@ export default function SettingsPage() {
   return (
     <div>
       <PageHeader title="Definições" />
+      <Card className="mb-6 border-primary/30 bg-primary/5">
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <div className="flex items-start gap-3">
+            <Sparkles className="mt-0.5 h-5 w-5 text-primary" />
+            <div>
+              <div className="text-sm font-medium">Assistente de configuração</div>
+              <p className="text-xs text-muted-foreground">Preencha o perfil passo a passo, com explicações e estimativas para os valores que não conhece.</p>
+            </div>
+          </div>
+          <Button asChild variant="outline"><Link to="/boas-vindas">Abrir assistente</Link></Button>
+        </CardContent>
+      </Card>
       <div className="grid gap-6 lg:grid-cols-2">
         <GarminCard />
         <ProfileCard />

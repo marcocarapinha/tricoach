@@ -17,3 +17,23 @@ describe("regras de palavra-passe", () => {
     expect(loginBackoffMs(20)).toBe(60000);
   });
 });
+
+import { cssFromTests, fmtMmSs, ftpFrom20min, ftpFromLevel, hrMaxFromAge, lthrFromHrMax, parseMmSs, thresholdPaceFrom10k } from "../onboarding";
+
+describe("estimativas do assistente inicial", () => {
+  it("lê e formata mm:ss", () => {
+    expect(parseMmSs("4:15")).toBe(255);
+    expect(parseMmSs("95")).toBe(95);
+    expect(parseMmSs("4:75")).toBeNull();
+    expect(parseMmSs("")).toBeNull();
+    expect(fmtMmSs(255)).toBe("4:15");
+  });
+  it("calcula FC, FTP, limiar de corrida e CSS", () => {
+    expect(hrMaxFromAge(40)).toBe(180);
+    expect(lthrFromHrMax(180)).toBe(160);
+    expect(ftpFromLevel(72, "intermediate")).toBe(215);
+    expect(ftpFrom20min(280)).toBe(266);
+    expect(thresholdPaceFrom10k(45 * 60)).toBe(281); // 4:30/km → 4:41/km
+    expect(cssFromTests(6 * 60 + 40, 3 * 60 + 10)).toBe(105); // 1:45/100 m
+  });
+});

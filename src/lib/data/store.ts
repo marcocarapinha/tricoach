@@ -244,6 +244,7 @@ export function supabaseStore(): Store {
         weights: { ...DEFAULT_PROFILE.weights, ...(r.readiness_weights ?? {}) },
         notifyEnabled: !!r.notify_enabled, notifyHour: r.notify_hour ?? 7, timezone: r.timezone ?? "Europe/Lisbon",
         functionalAreas: r.functional_areas ?? [], functionalLevel: r.functional_level ?? "intermediate", functionalEquipment: r.functional_equipment ?? ["band", "step"],
+        onboardedAt: r.onboarded_at ?? null,
       } : DEFAULT_PROFILE;
       return {
         profile,
@@ -269,7 +270,8 @@ export function supabaseStore(): Store {
         user_id: await userId(), name: p.name, ftp: p.ftp, run_threshold_pace: p.runThresholdPace, css: p.css, hr_max: p.hrMax, lthr: p.lthr,
         weight: p.weight, sleep_target_h: p.sleepTargetH, season_start_month: p.seasonStartMonth, readiness_weights: p.weights,
         notify_enabled: p.notifyEnabled, notify_hour: p.notifyHour, timezone: p.timezone,
-        functional_areas: p.functionalAreas, functional_level: p.functionalLevel, functional_equipment: p.functionalEquipment, updated_at: new Date().toISOString(),
+        functional_areas: p.functionalAreas, functional_level: p.functionalLevel, functional_equipment: p.functionalEquipment,
+        onboarded_at: p.onboardedAt ?? null, updated_at: new Date().toISOString(),
       });
       if (error) throw error;
     },

@@ -1,7 +1,7 @@
-import { NavLink, useLocation, useOutlet } from "react-router-dom";
+import { Link, NavLink, useLocation, useOutlet } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
-import { Activity, BarChart3, CalendarRange, Dumbbell, Gauge, HeartPulse, LayoutDashboard, MoreHorizontal, Settings, Sun, TrendingUp, Trophy } from "lucide-react";
+import { Sparkles, Activity, BarChart3, CalendarRange, Dumbbell, Gauge, HeartPulse, LayoutDashboard, MoreHorizontal, Settings, Sun, TrendingUp, Trophy } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useData } from "@/lib/data/DataProvider";
 import { Badge } from "@/components/ui/badge";
@@ -71,6 +71,13 @@ export default function Layout() {
             <Logo />
             <div className="flex items-center gap-1">{store.mode === "demo" && <Badge variant="warn">Demo</Badge>}<ThemeToggle /></div>
           </div>
+          {store.mode === "supabase" && core && !core.profile.onboardedAt && (
+            <Link to="/boas-vindas" className="mb-5 flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm transition-colors hover:bg-primary/10">
+              <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+              <span className="flex-1">A configuração inicial ainda não está concluída. Os limiares e a ligação ao Garmin melhoram as sugestões.</span>
+              <span className="font-medium text-primary">Continuar</span>
+            </Link>
+          )}
           <AnimatePresence mode="wait" initial={false}>
             <motion.div key={location.pathname} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.2, ease: "easeOut" }}>
               {outlet}

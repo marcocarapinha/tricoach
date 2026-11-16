@@ -103,6 +103,8 @@ export interface AthleteProfile {
   functionalLevel: "beginner" | "intermediate" | "advanced";
   /** material disponível além do peso corporal */
   functionalEquipment: string[];
+  /** quando o assistente inicial foi concluído (null = ainda não) */
+  onboardedAt?: string | null;
 }
 
 export const DEFAULT_PROFILE: AthleteProfile = {
@@ -122,6 +124,7 @@ export const DEFAULT_PROFILE: AthleteProfile = {
   functionalAreas: [],
   functionalLevel: "intermediate",
   functionalEquipment: ["band", "step"],
+  onboardedAt: null,
 };
 
 export type SuggestionStatus = "new" | "followed" | "ignored" | "not_applicable";
