@@ -1,0 +1,184 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Design system TriCoach
+ * Primária índigo · secundária violeta · acento ciano · Inter · radius 0.9rem
+ * Todas as cores vivem aqui como tokens HSL; os componentes só usam hsl(var(--token)).
+ */
+@layer base {
+  :root {
+    --background: 230 40% 99%;
+    --foreground: 232 40% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 232 40% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 232 40% 12%;
+
+    --primary: 243 75% 59%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 262 83% 58%;
+    --secondary-foreground: 0 0% 100%;
+    --accent: 189 94% 37%;
+    --accent-foreground: 0 0% 100%;
+
+    --muted: 230 30% 96%;
+    --muted-foreground: 230 12% 42%;
+    --destructive: 350 75% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 230 25% 90%;
+    --input: 230 25% 86%;
+    --ring: 243 75% 59%;
+    --radius: 0.9rem;
+
+    /* estados */
+    --good: 152 65% 36%;
+    --warn: 35 92% 45%;
+    --bad: 350 75% 50%;
+
+    /* modalidades */
+    --swim: 199 89% 45%;
+    --bike: 152 60% 40%;
+    --run: 25 95% 50%;
+    --brick: 292 70% 55%;
+    --strength: 228 12% 55%;
+    --other: 228 10% 65%;
+
+    /* gráficos (shadcn chart) */
+    --chart-1: var(--primary);
+    --chart-2: var(--accent);
+    --chart-3: var(--secondary);
+    --chart-4: 330 75% 55%;
+    --chart-5: 228 12% 60%;
+
+    /* anos de comparação: atual → N-3 */
+    --year-0: var(--primary);
+    --year-1: var(--accent);
+    --year-2: var(--secondary);
+    --year-3: 228 10% 62%;
+
+    /* carga */
+    --ctl: var(--accent);
+    --atl: 330 75% 55%;
+
+    /* fases da época */
+    --phase-transition: 228 10% 70%;
+    --phase-base: var(--accent);
+    --phase-build: var(--primary);
+    --phase-peak: var(--secondary);
+    --phase-taper: var(--good);
+    --phase-race: var(--warn);
+    --phase-recovery: 228 12% 55%;
+
+    /* zonas de intensidade */
+    --zone-1: 199 80% 50%;
+    --zone-2: 152 60% 42%;
+    --zone-3: 45 93% 47%;
+    --zone-4: 25 95% 52%;
+    --zone-5: 350 75% 52%;
+  }
+
+  .dark {
+    --background: 232 28% 6%;
+    --foreground: 226 30% 96%;
+    --card: 232 24% 9%;
+    --card-foreground: 226 30% 96%;
+    --popover: 232 24% 10%;
+    --popover-foreground: 226 30% 96%;
+
+    --primary: 239 84% 67%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 258 90% 66%;
+    --secondary-foreground: 0 0% 100%;
+    --accent: 188 86% 53%;
+    --accent-foreground: 232 28% 8%;
+
+    --muted: 232 18% 14%;
+    --muted-foreground: 228 12% 62%;
+    --destructive: 350 80% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 232 16% 17%;
+    --input: 232 16% 22%;
+    --ring: 239 84% 67%;
+
+    --good: 152 60% 48%;
+    --warn: 38 92% 56%;
+    --bad: 350 80% 63%;
+
+    --swim: 199 89% 60%;
+    --bike: 152 60% 50%;
+    --run: 25 95% 60%;
+    --brick: 292 70% 68%;
+    --strength: 228 12% 55%;
+    --other: 228 10% 42%;
+
+    --chart-4: 330 80% 66%;
+    --chart-5: 228 12% 55%;
+    --year-3: 228 10% 50%;
+    --atl: 330 80% 66%;
+
+    --phase-transition: 228 10% 35%;
+    --phase-recovery: 228 12% 48%;
+
+    --zone-1: 199 80% 58%;
+    --zone-2: 152 60% 45%;
+    --zone-3: 45 93% 55%;
+    --zone-4: 25 95% 57%;
+    --zone-5: 350 80% 62%;
+  }
+
+  * { @apply border-border; }
+  html { color-scheme: dark; }
+  html:not(.dark) { color-scheme: light; }
+  body { @apply bg-background font-sans text-foreground antialiased; font-feature-settings: "tnum" 1, "cv11" 1, "ss01" 1; }
+}
+
+.num { font-variant-numeric: tabular-nums; }
+
+/* ───────────── Aurora (ver src/components/effects/AuroraBackground.tsx) ───────────── */
+.aurora-layer {
+  --aurora: repeating-linear-gradient(100deg,
+    hsl(var(--primary)) 10%, hsl(var(--secondary)) 15%, hsl(var(--accent)) 20%,
+    hsl(var(--secondary)) 25%, hsl(var(--primary)) 30%);
+  --aurora-stripes: repeating-linear-gradient(100deg,
+    hsl(var(--background)) 0%, hsl(var(--background)) 7%, transparent 10%,
+    transparent 12%, hsl(var(--background)) 16%);
+  background-image: var(--aurora-stripes), var(--aurora);
+  background-size: 300%, 200%;
+  background-position: 50% 50%, 50% 50%;
+  filter: blur(12px) saturate(1.2);
+  will-change: transform;
+}
+.aurora-layer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--aurora-stripes), var(--aurora);
+  background-size: 200%, 100%;
+  background-attachment: fixed;
+  mix-blend-mode: multiply;
+  animation: aurora 60s linear infinite;
+}
+.dark .aurora-layer::after { mix-blend-mode: screen; }
+@keyframes aurora {
+  from { background-position: 50% 50%, 50% 50%; }
+  to { background-position: 350% 50%, 350% 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aurora-layer::after { animation: none; }
+}
+
+/* ───────────── react-grid-layout ───────────── */
+.react-grid-layout { position: relative; transition: height 200ms ease; }
+.react-grid-item { transition: all 200ms ease; transition-property: left, top, width, height; }
+.react-grid-item.cssTransforms { transition-property: transform, width, height; }
+.react-grid-item.react-draggable-dragging { transition: none; z-index: 3; opacity: .92; }
+.react-grid-item.react-grid-placeholder { background: hsl(var(--primary) / .12); border: 2px dashed hsl(var(--primary)); border-radius: var(--radius); z-index: 2; transition-duration: 100ms; }
+.react-grid-item > .react-resizable-handle { position: absolute; width: 18px; height: 18px; bottom: 4px; right: 4px; cursor: se-resize; }
+.react-grid-item > .react-resizable-handle::after { content: ""; position: absolute; right: 5px; bottom: 5px; width: 7px; height: 7px; border-right: 2px solid hsl(var(--muted-foreground)); border-bottom: 2px solid hsl(var(--muted-foreground)); }
+.layout:not(.is-editing) .react-resizable-handle { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .react-grid-layout, .react-grid-item { transition: none !important; }
+}
+.recharts-wrapper, .recharts-surface { outline: none; }

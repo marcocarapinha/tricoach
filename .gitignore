@@ -1,0 +1,11 @@
+node_modules
+dist
+.env
+.env.local
+*.log
+
+.env.local
+supabase/.temp
+supabase/.branches
+supabase/functions.log
+supabase/functions/.env
