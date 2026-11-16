@@ -133,9 +133,11 @@ export function demoStore(): Store {
     },
     async deleteRace(id) { const xs = lsGet<Race[]>("races", []).filter((x) => x.id !== id); lsSet("races", xs); if (cache) cache = { ...cache, races: xs, nextRace: toNext(xs) }; },
     async savePlanned(sessions) {
-      const vs = sessions.map((x) => ({ ...x, id: x.id || uid() }));
+      const prev = lsGet<PlannedSession[]>("planned", []);
+      const byExt = new Map(prev.filter((x) => x.externalId).map((x) => [x.externalId!, x.id]));
+      const vs = sessions.map((x) => ({ ...x, id: x.id || (x.externalId && byExt.get(x.externalId)) || uid() }));
       const ids = new Set(vs.map((x) => x.id));
-      const xs = lsGet<PlannedSession[]>("planned", []).filter((x) => !ids.has(x.id)).concat(vs);
+      const xs = prev.filter((x) => !ids.has(x.id)).concat(vs);
       lsSet("planned", xs); if (cache) cache = { ...cache, planned: xs };
       return vs;
     },
@@ -320,10 +322,12 @@ export function supabaseStore(): Store {
       const isId = (id: string) => /^[0-9a-f-]{36}$/i.test(id);
       const out: PlannedSession[] = [];
       const existing = sessions.filter((x) => isId(x.id)).map((x) => ({ id: x.id, ...row(x) }));
-      const fresh = sessions.filter((x) => !isId(x.id)).map(row);
-      for (const batch of [existing, fresh]) {
+      const fresh = sessions.filter((x) => !isId(x.id) && !x.externalId).map(row);
+      // vindas de um calendário: atualizam a sessão com o mesmo UID em vez de a repetir
+      const external = sessions.filter((x) => !isId(x.id) && x.externalId).map(row);
+      for (const [batch, opts] of [[existing, {}], [fresh, {}], [external, { onConflict: "user_id,external_id" }]] as const) {
         for (let i = 0; i < batch.length; i += 200) {
-          const { data, error } = await sb.from("planned_sessions").upsert(batch.slice(i, i + 200) as any[]).select();
+          const { data, error } = await sb.from("planned_sessions").upsert(batch.slice(i, i + 200) as any[], opts).select();
           if (error) throw error;
           out.push(...(data ?? []).map(plannedFromRow));
         }

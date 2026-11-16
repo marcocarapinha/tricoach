@@ -145,3 +145,19 @@ describe("calendário genérico", () => {
     expect(icsEventToSessions({ ...ev, summary: "Treino", description: "Corrida 40' Z2" }, P)[0].sport).toBe("run");
   });
 });
+
+import { importIcsFile } from "../coach-import";
+describe("ficheiro .ics exportado", () => {
+  it("importa só treinos a partir da data e com UID estável", () => {
+    const ics = ["BEGIN:VCALENDAR",
+      "BEGIN:VEVENT", "UID:a1", "DTSTART;VALUE=DATE:20261010", "SUMMARY:Corrida 40'", "END:VEVENT",
+      "BEGIN:VEVENT", "UID:a2", "DTSTART;TZID=Europe/Lisbon:20261118T070000", "SUMMARY:Natação 2000m", "END:VEVENT",
+      "BEGIN:VEVENT", "UID:a3", "DTSTART;VALUE=DATE:20261119", "SUMMARY:Dentista", "END:VEVENT",
+      "END:VCALENDAR"].join("\r\n");
+    const r = importIcsFile(ics, P, "2026-11-09");
+    expect(r.layout).toBe("ics");
+    expect(r.sessions.map((s) => `${s.date} ${s.sport} ${s.externalId}`)).toEqual(["2026-11-18 swim ics:a2"]);
+    expect(r.warnings[0]).toMatch(/1 evento do calendário/);
+    expect(() => importIcsFile("nada", P, "2026-11-09")).toThrow();
+  });
+});

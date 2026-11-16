@@ -4,7 +4,7 @@
 //   2. Grelha:   uma linha com os dias da semana (Seg…Dom) e uma semana por linha
 //   3. Grelha transposta: os dias da semana numa coluna e uma semana por coluna
 import { addDays, startOfWeek, todayISO } from "./dates";
-import { parseWorkoutText, type Paces, type ParsedSession } from "../../supabase/functions/_shared/workout-text.ts";
+import { icsEventToSessions, parseIcs, parseWorkoutText, type Paces, type ParsedSession } from "../../supabase/functions/_shared/workout-text.ts";
 
 export type Cell = string | number | Date | null | undefined;
 export interface Sheet { name: string; rows: Cell[][] }
@@ -15,9 +15,11 @@ export interface DraftSession extends ParsedSession {
   include: boolean;
   /** de onde veio, ex.: "Plano!C5" */
   origin: string;
+  /** UID do evento quando vem de um ficheiro de calendário (evita duplicados ao reimportar) */
+  externalId?: string;
 }
 
-export type Layout = "list" | "grid" | "grid-transposed" | "cells";
+export type Layout = "list" | "grid" | "grid-transposed" | "cells" | "ics";
 export interface ImportResult {
   layout: Layout;
   sessions: DraftSession[];
@@ -243,4 +245,28 @@ export async function readSpreadsheet(file: File): Promise<Sheet[]> {
     sheets.push({ name: ws.name, rows });
   });
   return sheets;
+}
+
+/**
+ * Ficheiro de calendário (.ics) exportado do Calendário do Mac, Outlook, Google…
+ * Só entram os eventos que são treinos, a partir de `from`.
+ */
+export function importIcsFile(text: string, paces: Paces, from: string, tz = "Europe/Lisbon"): ImportResult {
+  if (!text.includes("BEGIN:VCALENDAR")) throw new Error("O ficheiro não é um calendário .ics.");
+  const events = parseIcs(text, tz);
+  const recent = events.filter((e) => e.date >= from);
+  const sessions: DraftSession[] = [];
+  for (const e of recent) {
+    icsEventToSessions(e, paces).forEach((p, k) => sessions.push({
+      ...p, key: `ics-${seq++}`, date: e.date, include: true, origin: e.summary.slice(0, 40) || "evento",
+      externalId: `ics:${e.uid}${k ? `#${k}` : ""}`.slice(0, 300),
+    }));
+  }
+  sessions.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const warnings: string[] = [];
+  const ignored = recent.length - new Set(sessions.map((s) => s.externalId!.split("#")[0])).size;
+  if (ignored === 1) warnings.push("1 evento do calendário não parece um treino e foi ignorado.");
+  else if (ignored > 1) warnings.push(`${ignored} eventos do calendário não parecem treinos e foram ignorados.`);
+  if (!sessions.length) warnings.push(events.length ? "Não foram encontrados treinos a partir da data escolhida." : "O ficheiro não tem eventos.");
+  return { layout: "ics", sessions, warnings, usesStartDate: false };
 }

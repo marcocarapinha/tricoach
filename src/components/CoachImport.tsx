@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { AlertTriangle, CalendarDays, FileSpreadsheet, Loader2, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useLoaded } from "@/lib/data/DataProvider";
-import { importSheets, readSpreadsheet, type DraftSession, type ImportResult, type Sheet } from "@/lib/coach-import";
+import { importIcsFile, importSheets, readSpreadsheet, type DraftSession, type ImportResult, type Sheet } from "@/lib/coach-import";
 import { plannedTss } from "@/lib/engine/plan";
 import { addDays, fmtDatePt, startOfWeek, todayISO, WEEKDAYS_PT, diffDays } from "@/lib/dates";
 import { SESSION_LABEL, SPORT_COLOR, SPORT_LABEL, type PlannedSession, type SessionType, type Sport } from "@/lib/types";
@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 const SPORTS: Sport[] = ["swim", "bike", "run", "brick", "strength", "other"];
 const TYPES: SessionType[] = ["recovery", "technique", "endurance", "long", "tempo", "intervals", "race", "functional"];
 const LAYOUT_LABEL: Record<ImportResult["layout"], string> = {
-  list: "lista com datas", grid: "grelha semanal (dias em colunas)", "grid-transposed": "grelha semanal (dias em linhas)", cells: "células soltas",
+  ics: "calendário (.ics)", list: "lista com datas", grid: "grelha semanal (dias em colunas)", "grid-transposed": "grelha semanal (dias em linhas)", cells: "células soltas",
 };
 
 /** Sessão importada → sessão planeada (um passo aberto com a duração; o detalhe fica nas notas). */
@@ -27,7 +27,8 @@ export function draftToPlanned(d: DraftSession): PlannedSession {
     id: "", date: d.date, sport: d.sport, type: d.type, durationMin: d.durationMin,
     tss: plannedTss(d.sport, d.type, d.durationMin), title: d.title, description: d.description,
     steps: [{ kind: "step", intensity: "active", durationS: d.durationMin * 60, target: { type: "open" }, name: d.title.slice(0, 15) }],
-    source: "coach",
+    source: d.externalId ? "calendar" : "coach",
+    externalId: d.externalId ?? null,
   };
 }
 
@@ -37,6 +38,8 @@ export function CoachImportDialog({ open, onClose }: { open: boolean; onClose: (
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState("");
   const [sheets, setSheets] = useState<Sheet[] | null>(null);
+  const [icsText, setIcsText] = useState<string | null>(null);
+  const [icsFrom, setIcsFrom] = useState(addDays(todayISO(), -7));
   const [start, setStart] = useState(startOfWeek(addDays(todayISO(), 7)));
   const [rows, setRows] = useState<DraftSession[]>([]);
   const [meta, setMeta] = useState<Omit<ImportResult, "sessions"> | null>(null);
@@ -44,6 +47,8 @@ export function CoachImportDialog({ open, onClose }: { open: boolean; onClose: (
   const [busy, setBusy] = useState<"read" | "save" | null>(null);
   const paces = { runThresholdPace: core.profile.runThresholdPace, css: core.profile.css };
 
+  const apply = (r: ImportResult) => { setRows(r.sessions); const { sessions: _s, ...m } = r; setMeta(m); };
+  const runIcs = (text: string, from: string) => apply(importIcsFile(text, paces, from, core.profile.timezone || "Europe/Lisbon"));
   const run = (sh: Sheet[], startDate: string) => {
     const r = importSheets(sh, paces, startDate);
     setRows(r.sessions);
@@ -55,8 +60,15 @@ export function CoachImportDialog({ open, onClose }: { open: boolean; onClose: (
     if (!f) return;
     setBusy("read");
     try {
+      if (/\.(ics|ical|ifb)$/i.test(f.name)) {
+        const text = await f.text();
+        runIcs(text, icsFrom);
+        setFileName(f.name); setIcsText(text); setSheets([]);
+        return;
+      }
       const sh = await readSpreadsheet(f);
       setFileName(f.name);
+      setIcsText(null);
       setSheets(sh);
       run(sh, start);
     } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); } finally { setBusy(null); if (fileRef.current) fileRef.current.value = ""; }
@@ -82,14 +94,14 @@ export function CoachImportDialog({ open, onClose }: { open: boolean; onClose: (
       reset(); onClose();
     } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); } finally { setBusy(null); }
   };
-  const reset = () => { setSheets(null); setRows([]); setMeta(null); setFileName(""); };
+  const reset = () => { setSheets(null); setIcsText(null); setRows([]); setMeta(null); setFileName(""); };
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) { reset(); onClose(); } }}>
       <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><FileSpreadsheet className="h-5 w-5" />Importar treinos do treinador</DialogTitle>
-          <DialogDescription>Excel (.xlsx) ou CSV, no formato que o seu treinador usar. A app lê o ficheiro, propõe as sessões e pode corrigir tudo antes de importar.</DialogDescription>
+          <DialogTitle className="flex items-center gap-2"><FileSpreadsheet className="h-5 w-5" />Importar treinos</DialogTitle>
+          <DialogDescription>Excel (.xlsx) ou CSV no formato que o treinador usar, ou um ficheiro de calendário (.ics). A app lê o ficheiro, propõe as sessões e pode corrigir tudo antes de importar.</DialogDescription>
         </DialogHeader>
 
         {!sheets ? (
@@ -99,13 +111,20 @@ export function CoachImportDialog({ open, onClose }: { open: boolean; onClose: (
               className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed p-10 text-center transition-colors hover:border-primary hover:bg-primary/5">
               {busy === "read" ? <Loader2 className="h-8 w-8 animate-spin text-primary" /> : <Upload className="h-8 w-8 text-primary" />}
               <span className="font-medium">Escolher ficheiro ou arrastar para aqui</span>
-              <span className="text-xs text-muted-foreground">.xlsx, .csv · o ficheiro é lido só no seu dispositivo</span>
+              <span className="text-xs text-muted-foreground">.xlsx, .csv ou calendário .ics · o ficheiro é lido só no seu dispositivo</span>
             </button>
-            <input ref={fileRef} type="file" accept=".xlsx,.csv,.tsv,.txt" className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
+            <input ref={fileRef} type="file" accept=".xlsx,.csv,.tsv,.txt,.ics,text/calendar" className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
             <div className="grid gap-3 rounded-lg bg-muted/40 p-4 text-sm sm:grid-cols-3">
               <div><div className="font-medium">Lista</div><p className="text-xs text-muted-foreground">Uma linha por treino, com a data numa coluna: «18/11 | Bike | 1h30 Z2».</p></div>
               <div><div className="font-medium">Grelha semanal</div><p className="text-xs text-muted-foreground">Colunas Seg…Dom e uma semana por linha (com data ou «Semana 1»).</p></div>
               <div><div className="font-medium">Texto livre</div><p className="text-xs text-muted-foreground">«Natação 2000m técnica», «Corrida 45' solto», «Descanso»: modalidade, duração ou distância e intensidade.</p></div>
+            </div>
+            <div className="rounded-lg border p-4 text-sm">
+              <div className="font-medium">Calendário do Mac, Outlook ou outra app (.ics)</div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                No <b>Calendário do Mac</b>: selecione o calendário na barra lateral e use <b>Ficheiro → Exportar → Exportar…</b>; depois escolha aqui o ficheiro .ics.
+                Só entram os eventos que são treinos. Se voltar a importar o mesmo calendário, os treinos já importados são atualizados (não ficam repetidos).
+              </p>
             </div>
           </div>
         ) : (
@@ -115,6 +134,12 @@ export function CoachImportDialog({ open, onClose }: { open: boolean; onClose: (
                 <div className="font-medium">{fileName}</div>
                 <div className="text-xs text-muted-foreground">Arrumação detetada: {meta ? LAYOUT_LABEL[meta.layout] : "–"} · {rows.length} treinos encontrados</div>
               </div>
+              {icsText != null && (
+                <div className="space-y-1">
+                  <Label className="text-xs">Importar treinos a partir de</Label>
+                  <Input type="date" className="h-8 w-40" value={icsFrom} onChange={(e) => { const v = e.target.value || icsFrom; setIcsFrom(v); runIcs(icsText, v); }} />
+                </div>
+              )}
               {meta?.usesStartDate && (
                 <div className="space-y-1">
                   <Label className="text-xs">A «Semana 1» começa em</Label>
@@ -165,7 +190,7 @@ export function CoachImportDialog({ open, onClose }: { open: boolean; onClose: (
                           <td className="px-2 py-1.5"><Input className="h-8 min-w-[180px] text-xs" value={r.title} onChange={(e) => upd(r.key, { title: e.target.value })} /></td>
                           <td className="max-w-[260px] px-2 py-1.5 text-[11px] text-muted-foreground">
                             <div className="line-clamp-3 whitespace-pre-wrap" title={r.description}>{r.description}</div>
-                            <div className="pt-0.5 text-[10px]">{r.origin}</div>
+                            <div className="pt-0.5 text-[10px]">{r.externalId ? "calendário" : r.origin}</div>
                           </td>
                           <td className="px-2 py-1.5"><button className="rounded p-1 hover:bg-muted" aria-label="Retirar" onClick={() => setRows((xs) => xs.filter((x) => x.key !== r.key))}><Trash2 className="h-3.5 w-3.5" /></button></td>
                         </tr>

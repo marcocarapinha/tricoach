@@ -176,7 +176,7 @@ function WeekPlanner() {
           <Button variant="outline" size="sm" onClick={() => setWs(startOfWeek(derived.today))}>Esta semana</Button>
           <Button variant="outline" size="icon" aria-label="Semana seguinte" onClick={() => setWs(addDays(ws, 7))}><ChevronRight /></Button>
           {!coach && <Button variant={confirmGen ? "destructive" : "secondary"} size="sm" onClick={generate}><Sparkles />{confirmGen ? "Substituir semana?" : sessions.length ? "Regenerar" : "Gerar semana"}</Button>}
-          <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}><FileSpreadsheet />Importar Excel</Button>
+          <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}><FileSpreadsheet />Importar ficheiro</Button>
           <Button variant="outline" size="sm" onClick={() => setCalOpen(true)}><CalendarSync />Calendário</Button>
           {!!sessions.length && <Button variant={confirmDel ? "destructive" : "ghost"} size="sm" onClick={deleteWeek}><Trash2 />{confirmDel ? `Apagar ${sessions.length} sessões?` : "Apagar semana"}</Button>}
           <Button size="sm" onClick={() => setEdit(newSession(ws, core.profile))}><Plus />Sessão</Button>

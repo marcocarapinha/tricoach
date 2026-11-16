@@ -68,6 +68,9 @@ export function CalendarConnectDialog({ open, onClose }: { open: boolean; onClos
               <li>Copie o endereço de subscrição (começa por <code>webcal://</code> ou <code>https://</code>).</li>
               <li>Cole-o aqui. O endereço fica guardado encriptado no servidor.</li>
             </ol>
+            <p className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
+              Não tem um endereço de subscrição (por exemplo, no <b>Calendário do Mac</b>)? Exporte o calendário para um ficheiro (<b>Ficheiro → Exportar → Exportar…</b>) e use <b>Importar ficheiro</b> na página do plano. Pode repetir a importação sempre que quiser: os treinos são atualizados, não repetidos.
+            </p>
             <div className="space-y-1"><Label>Endereço do calendário</Label><Input placeholder="webcal://…  ou  https://…/calendar.ics" value={url} onChange={(e) => setUrl(e.target.value)} autoComplete="off" /></div>
             <Button disabled={url.trim().length < 12 || !!busy} onClick={() => run("connect", async () => { const r = await store.calendarConnect(url.trim(), "ics"); setUrl(""); reload(); toast.success(`Calendário ligado: ${r.imported} treinos importados`); })}>
               {busy === "connect" ? <Loader2 className="animate-spin" /> : <Link2 />}Ligar e importar
