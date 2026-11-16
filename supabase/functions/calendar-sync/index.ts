@@ -2,6 +2,8 @@
 // Lê um calendário .ics (do treinador ou de outras aplicações) e põe os treinos no plano (planned_sessions, source = 'calendar').
 // Ações (POST JSON { action, ... }):
 //   save-url { url }           → valida o endereço, guarda-o no Vault e importa
+//   icloud-calendars { username, password }            → lista os calendários iCloud (CalDAV)
+//   save-icloud { username, password, calendarUrl }    → guarda a ligação iCloud no Vault e importa
 //   sync                       → volta a ler o calendário
 //   remove                     → apaga a ligação (os treinos já importados ficam)
 //   cron                       → (pg_cron, x-cron-secret) lê o calendário de todos os utilizadores ligados
@@ -9,6 +11,10 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 import { authenticate, isCronCall } from "../_shared/auth.ts";
 import { SECRET_KEY, SUPABASE_URL } from "../_shared/env.ts";
 import { normalizeUrl } from "../_shared/url-guard.ts";
+import {
+  assertIcloudHost, basicAuth, calendarQuery, type CaldavConfig, ICLOUD_CALDAV, parseCalendarData, parseCalendars, parseHrefProp,
+  PROPFIND_CALENDARS, PROPFIND_HOME, PROPFIND_PRINCIPAL,
+} from "../_shared/caldav.ts";
 import { icsEventToSessions, parseIcs, type WSport, type WType } from "../_shared/workout-text.ts";
 
 const cors = {
@@ -46,6 +52,52 @@ async function fetchIcs(url: URL): Promise<string> {
   throw new Error("Demasiados redirecionamentos");
 }
 
+// ───────────── CalDAV (iCloud) ─────────────
+async function dav(url: string, method: string, body: string, depth: string, auth: string): Promise<{ status: number; text: string; url: string }> {
+  let cur = new URL(url);
+  for (let hop = 0; hop < 4; hop++) {
+    assertIcloudHost(cur); // as credenciais nunca saem do iCloud
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 25000);
+    let r: Response;
+    try {
+      r = await fetch(cur, { method, redirect: "manual", signal: ctrl.signal, body, headers: { Authorization: auth, Depth: depth, "Content-Type": "application/xml; charset=utf-8" } });
+    } catch (e) { throw new Error(`Não foi possível contactar o iCloud: ${e instanceof Error ? e.message : e}`); }
+    finally { clearTimeout(t); }
+    if (r.status >= 300 && r.status < 400 && r.headers.get("location")) { cur = new URL(r.headers.get("location")!, cur); continue; }
+    if (r.status === 401 || r.status === 403) throw new Error("O iCloud recusou o acesso. Confirme o email da conta Apple e use uma palavra-passe específica de app (não a palavra-passe normal).");
+    const text = await r.text();
+    if (text.length > MAX_BYTES) throw new Error("Resposta do calendário demasiado grande");
+    return { status: r.status, text, url: cur.toString() };
+  }
+  throw new Error("Demasiados redirecionamentos");
+}
+
+async function icloudCalendars(username: string, password: string) {
+  const auth = basicAuth(username, password);
+  let p = await dav(ICLOUD_CALDAV, "PROPFIND", PROPFIND_PRINCIPAL, "0", auth);
+  let principal = parseHrefProp(p.text, "current-user-principal");
+  if (!principal) { p = await dav(`${ICLOUD_CALDAV}.well-known/caldav`, "PROPFIND", PROPFIND_PRINCIPAL, "0", auth); principal = parseHrefProp(p.text, "current-user-principal"); }
+  if (!principal) throw new Error(`O iCloud não respondeu como esperado (${p.status}).`);
+  const h = await dav(new URL(principal, p.url).toString(), "PROPFIND", PROPFIND_HOME, "0", auth);
+  const home = parseHrefProp(h.text, "calendar-home-set");
+  if (!home) throw new Error("Não foi encontrada a pasta de calendários do iCloud.");
+  const homeUrl = new URL(home, h.url).toString();
+  const c = await dav(homeUrl, "PROPFIND", PROPFIND_CALENDARS, "1", auth);
+  return parseCalendars(c.text, homeUrl);
+}
+
+async function fetchCaldavIcs(cfg: CaldavConfig): Promise<string> {
+  const auth = basicAuth(cfg.username, cfg.password);
+  const from = new Date(Date.now() - 7 * 864e5), to = new Date(Date.now() + 60 * 864e5);
+  let r = await dav(cfg.calendarUrl, "REPORT", calendarQuery(from, to, true), "1", auth);
+  // servidores sem suporte para expandir repetições: pede sem expandir
+  if (r.status !== 207) r = await dav(cfg.calendarUrl, "REPORT", calendarQuery(from, to, false), "1", auth);
+  if (r.status === 404) throw new Error("O calendário escolhido já não existe no iCloud. Volte a ligar e escolha outro.");
+  if (r.status !== 207) throw new Error(`O iCloud respondeu ${r.status} ao ler o calendário.`);
+  return "BEGIN:VCALENDAR\r\n" + parseCalendarData(r.text) + "\r\nEND:VCALENDAR";
+}
+
 async function importFor(db: SupabaseClient, userId: string, ics: string) {
   const { data: prof } = await db.from("athlete_profile").select("run_threshold_pace, css, timezone").eq("user_id", userId).maybeSingle();
   const paces = { runThresholdPace: prof?.run_threshold_pace ?? 270, css: prof?.css ?? 100 };
@@ -53,12 +105,16 @@ async function importFor(db: SupabaseClient, userId: string, ics: string) {
   const from = addDays(today, -7);
   const events = parseIcs(ics, prof?.timezone ?? "Europe/Lisbon").filter((e) => e.date >= from);
   const rows: Record<string, unknown>[] = [];
+  // eventos repetidos (ocorrências com o mesmo UID) ficam distintos pela data
+  const uidCount = new Map<string, number>();
+  for (const e of events) uidCount.set(e.uid, (uidCount.get(e.uid) ?? 0) + 1);
   for (const e of events) {
+    const uid = (uidCount.get(e.uid) ?? 0) > 1 ? `${e.uid}@${e.date}` : e.uid;
     icsEventToSessions(e, paces).forEach((s, k) => rows.push({
       user_id: userId, day: e.date, sport: s.sport, session_type: s.type, duration_min: s.durationMin,
       tss: plannedTss(s.sport, s.type, s.durationMin), title: s.title, description: s.description || null,
       steps: [{ kind: "step", intensity: "active", durationS: s.durationMin * 60, target: { type: "open" }, name: s.title.slice(0, 15) }],
-      source: "calendar", external_id: `ics:${e.uid}${k ? `#${k}` : ""}`.slice(0, 300),
+      source: "calendar", external_id: `ics:${uid}${k ? `#${k}` : ""}`.slice(0, 300),
     }));
   }
   for (let i = 0; i < rows.length; i += 200) {
@@ -76,10 +132,12 @@ async function importFor(db: SupabaseClient, userId: string, ics: string) {
 }
 
 async function syncUser(db: SupabaseClient, userId: string) {
-  const { data: url, error } = await db.rpc("calendar_get_url", { p_user: userId });
-  if (error || !url) throw new Error("Calendário não ligado");
+  const { data: secret, error } = await db.rpc("calendar_get_url", { p_user: userId });
+  if (error || !secret) throw new Error("Calendário não ligado");
   try {
-    return await importFor(db, userId, await fetchIcs(normalizeUrl(url as string)));
+    const s = String(secret);
+    const ics = s.startsWith("{") ? await fetchCaldavIcs(JSON.parse(s) as CaldavConfig) : await fetchIcs(normalizeUrl(s));
+    return await importFor(db, userId, ics);
   } catch (e) {
     await db.from("calendar_feed").update({ status: "error", last_error: e instanceof Error ? e.message : String(e), updated_at: new Date().toISOString() }).eq("user_id", userId);
     throw e;
@@ -112,6 +170,21 @@ Deno.serve(async (req) => {
         const provider = "ics";
         const ics = await fetchIcs(url); // valida antes de guardar
         const { error } = await db.rpc("calendar_set_url", { p_user: user.id, p_url: url.toString(), p_provider: provider });
+        if (error) throw error;
+        return json({ ok: true, ...(await importFor(db, user.id, ics)) });
+      }
+      case "icloud-calendars": {
+        const username = String(body.username ?? "").trim(), password = String(body.password ?? "").replace(/\s+/g, "");
+        if (!username.includes("@") || password.length < 12) return json({ error: "Indique o email da conta Apple e a palavra-passe específica de app (16 letras)." }, 400);
+        return json({ ok: true, calendars: await icloudCalendars(username, password) });
+      }
+      case "save-icloud": {
+        const username = String(body.username ?? "").trim(), password = String(body.password ?? "").replace(/\s+/g, "");
+        const calendarUrl = new URL(String(body.calendarUrl ?? ""));
+        assertIcloudHost(calendarUrl);
+        const cfg: CaldavConfig = { type: "caldav", server: ICLOUD_CALDAV, username, password, calendarUrl: calendarUrl.toString(), calendarName: String(body.calendarName ?? "").slice(0, 80) };
+        const ics = await fetchCaldavIcs(cfg); // valida antes de guardar
+        const { error } = await db.rpc("calendar_set_url", { p_user: user.id, p_url: JSON.stringify(cfg), p_provider: "icloud" });
         if (error) throw error;
         return json({ ok: true, ...(await importFor(db, user.id, ics)) });
       }

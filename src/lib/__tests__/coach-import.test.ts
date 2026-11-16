@@ -161,3 +161,41 @@ describe("ficheiro .ics exportado", () => {
     expect(() => importIcsFile("nada", P, "2026-11-09")).toThrow();
   });
 });
+
+import { assertIcloudHost, basicAuth, calendarQuery, parseCalendarData, parseCalendars, parseHrefProp } from "../../../supabase/functions/_shared/caldav.ts";
+describe("CalDAV iCloud", () => {
+  it("lê o principal e a pasta de calendários", () => {
+    const p = `<?xml version="1.0"?><multistatus xmlns="DAV:"><response><href>/</href><propstat><prop><current-user-principal><href>/1234567/principal/</href></current-user-principal></prop><status>HTTP/1.1 200 OK</status></propstat></response></multistatus>`;
+    expect(parseHrefProp(p, "current-user-principal")).toBe("/1234567/principal/");
+    const h = `<d:multistatus xmlns:d="DAV:"><d:response><d:href>/1234567/principal/</d:href><d:propstat><d:prop><calendar-home-set xmlns="urn:ietf:params:xml:ns:caldav"><href xmlns="DAV:">https://p52-caldav.icloud.com:443/1234567/calendars/</href></calendar-home-set></d:prop></d:propstat></d:response></d:multistatus>`;
+    expect(parseHrefProp(h, "calendar-home-set")).toBe("https://p52-caldav.icloud.com:443/1234567/calendars/");
+  });
+  it("lista só calendários de eventos", () => {
+    const x = `<multistatus xmlns="DAV:">
+      <response><href>/1234567/calendars/</href><propstat><prop><resourcetype><collection/></resourcetype></prop></propstat></response>
+      <response><href>/1234567/calendars/home/</href><propstat><prop><displayname>Casa</displayname><resourcetype><collection/><calendar xmlns="urn:ietf:params:xml:ns:caldav"/></resourcetype><supported-calendar-component-set xmlns="urn:ietf:params:xml:ns:caldav"><comp name="VEVENT"/></supported-calendar-component-set><calendar-color xmlns="http://apple.com/ns/ical/">#34AADCFF</calendar-color></prop></propstat></response>
+      <response><href>/1234567/calendars/treinos/</href><propstat><prop><displayname>Treinos &amp; provas</displayname><resourcetype><collection/><calendar xmlns="urn:ietf:params:xml:ns:caldav"/></resourcetype><supported-calendar-component-set xmlns="urn:ietf:params:xml:ns:caldav"><comp name="VEVENT"/></supported-calendar-component-set></prop></propstat></response>
+      <response><href>/1234567/calendars/tasks/</href><propstat><prop><displayname>Lembretes</displayname><resourcetype><collection/><calendar xmlns="urn:ietf:params:xml:ns:caldav"/></resourcetype><supported-calendar-component-set xmlns="urn:ietf:params:xml:ns:caldav"><comp name="VTODO"/></supported-calendar-component-set></prop></propstat></response>
+      <response><href>/1234567/calendars/inbox/</href><propstat><prop><resourcetype><collection/><schedule-inbox xmlns="urn:ietf:params:xml:ns:caldav"/></resourcetype></prop></propstat></response>
+    </multistatus>`;
+    const c = parseCalendars(x, "https://p52-caldav.icloud.com:443/1234567/calendars/");
+    expect(c).toEqual([
+      { url: "https://p52-caldav.icloud.com/1234567/calendars/home/", name: "Casa", color: "#34AADC" },
+      { url: "https://p52-caldav.icloud.com/1234567/calendars/treinos/", name: "Treinos & provas", color: null },
+    ]);
+  });
+  it("junta os eventos do REPORT num .ics que o leitor entende", () => {
+    const ev = (uid: string, d: string, s: string) => `BEGIN:VCALENDAR&#13;\nBEGIN:VEVENT&#13;\nUID:${uid}&#13;\nDTSTART:${d}&#13;\nSUMMARY:${s}&#13;\nEND:VEVENT&#13;\nEND:VCALENDAR`;
+    const x = `<multistatus xmlns="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav"><response><href>/a.ics</href><propstat><prop><C:calendar-data>${ev("r1", "20261118T070000Z", "Natação 2000m")}</C:calendar-data></prop></propstat></response><response><href>/b.ics</href><propstat><prop><C:calendar-data><![CDATA[${ev("r1", "20261125T070000Z", "Natação 2000m").replace(/&#13;/g, "\r")}]]></C:calendar-data></prop></propstat></response></multistatus>`;
+    const ev2 = parseIcs(parseCalendarData(x));
+    expect(ev2.map((e) => `${e.uid} ${e.date} ${e.summary}`)).toEqual(["r1 2026-11-18 Natação 2000m", "r1 2026-11-25 Natação 2000m"]);
+  });
+  it("só envia credenciais para o iCloud", () => {
+    expect(() => assertIcloudHost(new URL("https://p52-caldav.icloud.com/x"))).not.toThrow();
+    expect(() => assertIcloudHost(new URL("https://evil.com/x"))).toThrow();
+    expect(() => assertIcloudHost(new URL("https://icloud.com.evil.com/x"))).toThrow();
+    expect(() => assertIcloudHost(new URL("http://caldav.icloud.com/x"))).toThrow();
+    expect(basicAuth("a@b.pt", "abcd-efgh")).toBe("Basic " + Buffer.from("a@b.pt:abcd-efgh").toString("base64"));
+    expect(calendarQuery(new Date("2026-11-09T00:00:00Z"), new Date("2027-01-08T00:00:00Z"))).toContain('<c:expand start="20261109T000000Z" end="20270108T000000Z"/>');
+  });
+});

@@ -69,6 +69,9 @@ export interface Store {
   calendarStatus(): Promise<CalendarFeed | null>;
   calendarConnect(url: string, provider: string): Promise<{ imported: number }>;
   calendarSync(): Promise<{ imported: number }>;
+  /** Calendário iCloud (CalDAV, com palavra-passe específica de app) */
+  icloudCalendars(username: string, password: string): Promise<{ url: string; name: string; color: string | null }[]>;
+  icloudConnect(username: string, password: string, calendarUrl: string, calendarName: string): Promise<{ imported: number }>;
   calendarRemove(): Promise<void>;
 }
 
@@ -154,6 +157,8 @@ export function demoStore(): Store {
     async calendarStatus() { return null; },
     async calendarConnect() { throw new Error("A ligação ao calendário precisa de uma conta (não funciona no modo demo)."); },
     async calendarSync() { return { imported: 0 }; },
+    async icloudCalendars() { throw new Error("A ligação ao iCloud precisa de uma conta (não funciona no modo demo)."); },
+    async icloudConnect() { throw new Error("A ligação ao iCloud precisa de uma conta (não funciona no modo demo)."); },
     async calendarRemove() { /* modo demo */ },
     async deletePushSubscription() { /* modo demo */ },
     async sendTestNotification() {
@@ -375,6 +380,16 @@ export function supabaseStore(): Store {
     },
     async calendarSync() {
       const { data, error } = await sb.functions.invoke("calendar-sync", { body: { action: "sync" } });
+      if (error) throw await functionError(error, "calendar-sync");
+      return { imported: Number((data as any)?.imported ?? 0) };
+    },
+    async icloudCalendars(username, password) {
+      const { data, error } = await sb.functions.invoke("calendar-sync", { body: { action: "icloud-calendars", username, password } });
+      if (error) throw await functionError(error, "calendar-sync");
+      return (data as any)?.calendars ?? [];
+    },
+    async icloudConnect(username, password, calendarUrl, calendarName) {
+      const { data, error } = await sb.functions.invoke("calendar-sync", { body: { action: "save-icloud", username, password, calendarUrl, calendarName } });
       if (error) throw await functionError(error, "calendar-sync");
       return { imported: Number((data as any)?.imported ?? 0) };
     },
