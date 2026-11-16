@@ -50,6 +50,7 @@ export function RoutineView({ r, dense }: { r: Routine; dense?: boolean }) {
           )}
         </li>
       ))}
+      {!dense && <li className="px-1 pt-1 text-[11px] text-muted-foreground">Pare se sentir dor. Confirme os exercícios e as cargas com um fisioterapeuta ou treinador, sobretudo se tiver uma lesão.</li>}
     </ol>
   );
 }

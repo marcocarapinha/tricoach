@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft, ArrowRight, Bell, Bike, CalendarRange, Check, CheckCircle2, Download, Dumbbell, HeartPulse, HelpCircle,
-  KeyRound, Loader2, Sparkles, User, Waves, Footprints,
+  KeyRound, Loader2, ShieldAlert, Sparkles, User, Waves, Footprints,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useLoaded } from "@/lib/data/DataProvider";
@@ -24,6 +24,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InstallAppButton } from "@/components/AppActions";
+import { DisclaimerText } from "@/components/Disclaimer";
 import { cn } from "@/lib/utils";
 
 type StepId = "welcome" | "about" | "heart" | "bike" | "run" | "swim" | "season" | "functional" | "garmin" | "notify" | "done";
@@ -95,6 +96,7 @@ export default function OnboardingPage({ onLater }: { onLater?: () => void }) {
   const [gExp, setGExp] = useState("");
   const [gState, setGState] = useState<"idle" | "busy" | "ok">("idle");
   const [pushBusy, setPushBusy] = useState(false);
+  const [ack, setAck] = useState(!!core.profile.onboardedAt);
 
   const persist = async (patch: Partial<AthleteProfile> = {}) => {
     const next = { ...p, ...patch, name: (patch.name ?? p.name).trim() || "Atleta" };
@@ -208,6 +210,14 @@ export default function OnboardingPage({ onLater }: { onLater?: () => void }) {
                       ))}
                     </ul>
                     <Why>Com estes dados a app calcula a carga de cada treino (TSS), as suas zonas e a prontidão diária, e adapta o plano e as sugestões a si.</Why>
+                    <div className="space-y-3 rounded-lg border border-warn/40 bg-warn/5 p-4">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-warn"><ShieldAlert className="h-4 w-4" />Aviso importante</div>
+                      <DisclaimerText />
+                      <label className="flex items-start gap-2 pt-1 text-sm">
+                        <Checkbox checked={ack} onCheckedChange={(c) => setAck(!!c)} className="mt-0.5" />
+                        <span>Compreendo que o TriCoach não é um treinador nem um profissional de saúde e que devo validar as indicações com um profissional especializado.</span>
+                      </label>
+                    </div>
                   </>
                 )}
 
@@ -465,7 +475,7 @@ export default function OnboardingPage({ onLater }: { onLater?: () => void }) {
             {step === "done" ? (
               <Button onClick={finish} disabled={saving}>{saving && <Loader2 className="animate-spin" />}Começar a usar</Button>
             ) : (
-              <Button onClick={() => go(1)} disabled={saving}>{saving && <Loader2 className="animate-spin" />}{step === "welcome" ? "Começar" : "Seguinte"}<ArrowRight /></Button>
+              <Button onClick={() => go(1)} disabled={saving || (step === "welcome" && !ack)}>{saving && <Loader2 className="animate-spin" />}{step === "welcome" ? "Começar" : "Seguinte"}<ArrowRight /></Button>
             )}
           </div>
         </Card>

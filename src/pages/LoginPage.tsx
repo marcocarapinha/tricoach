@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/Layout";
+import { DisclaimerNote } from "@/components/Disclaimer";
 
 const FAIL_KEY = "tricoach.loginFailures";
 
@@ -106,6 +107,7 @@ export default function LoginPage() {
             <button className="text-muted-foreground hover:text-foreground" onClick={() => { setMode(mode === "in" ? "up" : "in"); setPw(""); }}>{mode === "in" ? "Criar conta" : "Já tenho conta"}</button>
             <button className="text-primary hover:underline" onClick={useDemo}>Explorar em modo demo</button>
           </div>
+          <DisclaimerNote className="mt-5 border-t pt-4" />
         </CardContent>
       </Card>
     </div>

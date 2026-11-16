@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { cn } from "@/lib/utils";
 import { InstallAppButton, SignOutButton } from "@/components/AppActions";
+import { DisclaimerNote } from "@/components/Disclaimer";
 
 const NAV = [
   { to: "/", label: "Hoje", icon: Sun, end: true },
@@ -83,6 +84,7 @@ export default function Layout() {
               {outlet}
             </motion.div>
           </AnimatePresence>
+          <footer className="mt-12 border-t pt-4"><DisclaimerNote className="justify-center text-center md:justify-start md:text-left" /></footer>
         </div>
       </main>
       <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t bg-card/90 py-2 backdrop-blur md:hidden">
